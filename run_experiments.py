@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import polars as pl
 import taichi as ti
@@ -32,6 +34,10 @@ def print_summary(name, expt_data):
 
 
 def run_experiments():
+    # Make a place to save results.
+    path = Path('output')
+    path.mkdir(exist_ok=True)
+
     # Run each experiment condition in turn.
     frames = []
     for name, make_environment in conditions.items():
@@ -44,7 +50,8 @@ def run_experiments():
 
         # Save the final environment for this experiment. Currently this is
         # always static, but eventually it will be evolved.
-        np.savez(f'output/env_{name}.npz', **environment.to_numpy())
+        (path / name).mkdir(exist_ok=True)
+        np.savez(path / name / 'env.npz', **environment.to_numpy())
 
         # Summarize results on the command line.
         print_summary(name, expt_data)

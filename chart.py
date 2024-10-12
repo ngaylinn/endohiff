@@ -7,20 +7,20 @@ from tqdm import trange
 
 from constants import MAX_HIFF, MIN_HIFF
 
-def chart_fitness(name, expt_data):
+def chart_fitness(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('fitness').max())
     fig = sns.relplot(data=expt_data, x='generation', y='fitness', kind='line')
     plt.ylim(MIN_HIFF, MAX_HIFF)
     fig.set(title=f'Max fitness score ({name})')
-    fig.savefig(f'output/{name}/fitness.png', dpi=600)
+    fig.savefig(path / 'fitness.png', dpi=600)
 
 
-def chart_hiff(name, expt_data):
+def chart_hiff(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('hiff').max())
     fig = sns.relplot(data=expt_data, x='generation', y='hiff', kind='line')
     plt.ylim(MIN_HIFF, MAX_HIFF)
     fig.set(title=f'Max HIFF score ({name})')
-    fig.savefig(f'output/{name}/hiff.png', dpi=600)
+    fig.savefig(path / 'hiff.png', dpi=600)
 
 
 def chart_all_results():
@@ -33,13 +33,14 @@ def chart_all_results():
     num_artifacts = 2 * len(conditions)
     progress = trange(num_artifacts)
     for name in conditions:
-        Path(f'output/{name}').mkdir(exist_ok=True)
+        path = Path(f'output/{name}')
+        path.mkdir(exist_ok=True)
         expt_data = history.filter(pl.col('condition') == name)
 
-        chart_fitness(name, expt_data)
+        chart_fitness(path, name, expt_data)
         progress.update()
 
-        chart_hiff(name, expt_data)
+        chart_hiff(path, name, expt_data)
         progress.update()
 
 

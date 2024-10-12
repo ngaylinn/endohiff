@@ -2,6 +2,7 @@ from math import sqrt
 from pathlib import Path
 
 import einops
+from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
@@ -46,6 +47,8 @@ def render_env_map(env_data):
 
     # For all the different substring lengths, render the average weight given
     # to substrings of that size in their own plots.
+    # TODO: How might we show the different weights across substrings of the
+    # same size? This is a harder visualization challenge.
     w = 0
     for p in range(BITSTR_POWER):
         substr_len = 2 ** (p + 1)
@@ -58,68 +61,105 @@ def render_env_map(env_data):
         plt.clim(0.0, 1.0)
         plt.colorbar()
         w += substr_count
-    plt.tight_layout()
 
 
-def save_env_map(name, env_data):
+def save_env_map(path, name, env_data):
     render_env_map(env_data)
     plt.suptitle(f'Environment map ({name})')
-    plt.savefig(f'output/{name}/env_map.png', dpi=600)
+    plt.tight_layout()
+    plt.savefig(path / 'env_map.png', dpi=600)
     plt.close()
 
 
-def render_pop_map(pop_data):
+def make_pop_map(pop_data):
     # Arrange the population data spatially.
-    pop_data = pop_data.to_numpy().flatten()
     ew, eh = ENVIRONMENT_SHAPE
     cw, ch = [int(sqrt(CARRYING_CAPACITY))] * 2
-    pop_map = einops.rearrange(
+    return einops.rearrange(
         pop_data, '(ew eh cw ch) -> (eh ch) (ew cw)',
         ew=ew, eh=eh, cw=cw, ch=ch)
 
-    # Render the data to a figure.
+def render_pop_map(pop_map):
+    # Render the population data to a figure, with a color scale proportional
+    # to the MAX_HIFF score and dead cells rendered in black.
+    image = plt.imshow(pop_map, plt.get_cmap().with_extremes(under='black'))
+    plt.clim(1e-6, MAX_HIFF)
+    return image
+
+
+def save_fitness_map(path, name, expt_data):
+    pop_data = expt_data.select('fitness').to_numpy().flatten()
     plt.figure(figsize=(8, 4.5))
-    plt.imshow(pop_map)
-    plt.clim(0, MAX_HIFF)
-    plt.colorbar()
-
-
-def save_fitness_map(name, expt_data):
-    render_pop_map(expt_data.select('fitness'))
+    render_pop_map(make_pop_map(pop_data))
     plt.suptitle(f'Fitness map ({name})')
-    plt.savefig(f'output/{name}/fitness_map.png', dpi=600)
+    plt.colorbar()
+    plt.savefig(path / 'fitness_map.png', dpi=600)
     plt.close()
 
 
-def save_hiff_map(name, expt_data):
-    render_pop_map(expt_data.select('hiff'))
+def save_hiff_map(path, name, expt_data):
+    pop_data = expt_data.select('hiff').to_numpy().flatten()
+    plt.figure(figsize=(8, 4.5))
+    render_pop_map(make_pop_map(pop_data))
     plt.suptitle(f'HIFF score map ({name})')
-    plt.savefig(f'output/{name}/hiff_map.png', dpi=600)
+    plt.colorbar()
+    plt.savefig(path / 'hiff_map.png', dpi=600)
     plt.close()
+
+def save_fitness_animation(path, expt_data):
+    # Grab the data we need and split it by generation.
+    fitness_by_generation = expt_data.select(
+        'fitness'
+    ).to_numpy().reshape(NUM_GENERATIONS, -1)
+
+    # Set up a figure with no decorations or padding.
+    fig = plt.figure(frameon=False, figsize=(8, 4.5))
+    ax = plt.Axes(fig, [0, 0, 1, 1])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+
+    # Render the first frame, and make an animation for the rest.
+    image = render_pop_map(make_pop_map(fitness_by_generation[0]))
+    def animate_func(generation):
+        image.set_array(make_pop_map(fitness_by_generation[generation]))
+        return image
+    anim = FuncAnimation(fig, animate_func, NUM_GENERATIONS, interval=100)
+    anim.save(path / 'fitness_map.gif', writer='pillow')
 
 
 def save_all_results():
+    # Load the full state history for all our experiments, and prepare to
+    # generate several visualizations for each condition (with progress bar)
     history = pl.read_parquet('output/history.parquet')
-    conditions = history.select('condition').unique().to_series().to_list()
-    num_artifacts = 3 * len(conditions)
+    conditions = history['condition'].unique().to_list()
+    num_artifacts = 4 * len(conditions)
     progress = trange(num_artifacts)
-    for name in conditions:
-        Path(f'output/{name}').mkdir(exist_ok=True)
 
-        expt_data = history.filter(
-            pl.col('condition') == name
-        ).filter(
+    # For each experiment condition...
+    for name in conditions:
+        path = Path(f'output/{name}')
+        path.mkdir(exist_ok=True)
+        expt_data = history.filter(pl.col('condition') == name)
+
+        # Save an animation of fitness over time.
+        save_fitness_animation(path, expt_data)
+        progress.update()
+
+        # Restrict to the last generation and render maps of the final fitnes
+        # and HIFF scores.
+        expt_data = expt_data.filter(
             pl.col('generation') == NUM_GENERATIONS - 1
         )
 
-        save_fitness_map(name, expt_data)
+        save_fitness_map(path, name, expt_data)
         progress.update()
 
-        save_hiff_map(name, expt_data)
+        save_hiff_map(path, name, expt_data)
         progress.update()
 
-        env_data = np.load(f'output/env_{name}.npz')
-        save_env_map(name, env_data)
+        # Load and render the environment where this experiment happened.
+        env_data = np.load(path / f'env.npz')
+        save_env_map(path, name, env_data)
         progress.update()
 
 

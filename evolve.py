@@ -21,7 +21,7 @@ index = pl.DataFrame({
 def evolve(environment):
     # Setup
     population = InnerPopulation()
-    population.randomize(0)
+    population.randomize()
 
     # Random search (TODO: make this evolutionary!)
     progress = trange(NUM_GENERATIONS)
@@ -30,7 +30,7 @@ def evolve(environment):
         progress.set_description(f'F={best_hiff}')
 
         if generation + 1 < NUM_GENERATIONS:
-            population.propagate(generation)
+            population.propagate(environment, generation)
 
     # Record the full history and save to disk.
     history = pl.DataFrame({
