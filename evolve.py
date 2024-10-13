@@ -7,7 +7,7 @@ from constants import (
 from inner_population import InnerPopulation
 from outer_population import OuterPopulation
 
-# TODO: This should include the environment index, yah?
+# TODO: This should include the environment and trial indices, yah?
 # Compute an index enumerating the generation number and position of each
 # individual in a population over evolutionary time.
 g = INNER_GENERATIONS
@@ -18,6 +18,7 @@ index = pl.DataFrame({
     'x': np.tile(np.arange(w).repeat(h * c), g),
     'y': np.tile(np.arange(h).repeat(c), g * w),
 })
+
 
 def summarize(inner_population, inner_log):
     # Compute aggregate metrics.
@@ -36,6 +37,7 @@ def summarize(inner_population, inner_log):
     ).with_columns(
         diversity=diversity
     )
+
 
 def evolve(environment):
     # Setup
