@@ -53,7 +53,6 @@ class InnerPopulation:
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: int) -> ti.uint32:
-        best_hiff = ti.cast(0, ti.uint32)
         for x, y, i in ti.ndrange(*self.shape):
             fitness, hiff = 0.0, 0
             # Only evaluate fitness of individuals that are alive.
@@ -61,10 +60,8 @@ class InnerPopulation:
             if individual.id != DEAD_ID:
                 fitness, hiff = weighted_hiff(
                     individual.bitstr, environment.weights[x, y])
-            ti.atomic_max(best_hiff, hiff)
             self.pop[g, x, y, i].fitness = fitness
             self.pop[g, x, y, i].hiff = hiff
-        return best_hiff
 
     @ti.kernel
     def propagate(self, environment: ti.template(), g: int):

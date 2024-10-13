@@ -24,13 +24,11 @@ def evolve(environment):
     population.randomize()
 
     # Random search (TODO: make this evolutionary!)
-    progress = trange(INNER_GENERATIONS)
-    for generation in progress:
-        best_hiff = population.evaluate(environment, generation)
-        progress.set_description(f'F={best_hiff}')
+    for inner_generation in range(INNER_GENERATIONS):
+        population.evaluate(environment, inner_generation)
 
-        if generation + 1 < INNER_GENERATIONS:
-            population.propagate(environment, generation)
+        if inner_generation + 1 < INNER_GENERATIONS:
+            population.propagate(environment, inner_generation)
 
     # Collect the full evolutionary history in a data frame and return it.
     return pl.DataFrame({

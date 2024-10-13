@@ -47,17 +47,17 @@ def run_experiments():
 
         # Run the condition and cache the results.
         environment = make_environment()
-        expt_data = evolve(environment)
+        inner_log = evolve(environment)
 
         # Save the experiment logs to disk.
-        expt_data.write_parquet(path / 'inner_log.parquet')
+        inner_log.write_parquet(path / 'inner_log.parquet')
 
         # Save the final environment for this experiment. Currently this is
         # always static, but eventually it will be evolved.
         np.savez(path / 'env.npz', **environment.to_numpy())
 
         # Summarize results on the command line.
-        print_summary(name, expt_data)
+        print_summary(name, inner_log)
 
 
 if __name__ == '__main__':
