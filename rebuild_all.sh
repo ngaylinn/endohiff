@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# If any of the below commands fail, exit immediately.
+set -e
+
+# Delete old outputs if they exist.
 rm -rf output
 
 echo "Simulating evolution..."

@@ -1,6 +1,5 @@
 import numpy as np
 import polars as pl
-from tqdm import trange
 
 from constants import CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS
 from inner_population import InnerPopulation
@@ -20,20 +19,20 @@ index = pl.DataFrame({
 
 def evolve(environment):
     # Setup
-    population = InnerPopulation()
-    population.randomize()
+    inner_population = InnerPopulation()
 
     # Random search (TODO: make this evolutionary!)
+    inner_population.randomize()
     for inner_generation in range(INNER_GENERATIONS):
-        population.evaluate(environment, inner_generation)
+        inner_population.evaluate(environment, inner_generation)
 
         if inner_generation + 1 < INNER_GENERATIONS:
-            population.propagate(environment, inner_generation)
+            inner_population.propagate(environment, inner_generation)
 
     # Collect the full evolutionary history in a data frame and return it.
     return pl.DataFrame({
         field_name: data.flatten()
-        for field_name, data in population.to_numpy().items()
+        for field_name, data in inner_population.to_numpy().items()
     }).hstack(
         index
     )

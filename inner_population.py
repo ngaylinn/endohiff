@@ -52,7 +52,7 @@ class InnerPopulation:
         self.next_id[None] += ti.static(self.size)
 
     @ti.kernel
-    def evaluate(self, environment: ti.template(), g: int) -> ti.uint32:
+    def evaluate(self, environment: ti.template(), g: int):
         for x, y, i in ti.ndrange(*self.shape):
             fitness, hiff = 0.0, 0
             # Only evaluate fitness of individuals that are alive.
