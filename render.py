@@ -10,7 +10,8 @@ from tqdm import trange
 
 from constants import (
     BITSTR_POWER, BITSTR_LEN, CARRYING_CAPACITY, ENVIRONMENT_SHAPE,
-    NUM_GENERATIONS, NUM_WEIGHTS, MAX_HIFF, MIN_HIFF)
+    INNER_GENERATIONS, NUM_WEIGHTS, MAX_HIFF, MIN_HIFF, OUTPUT_PATH)
+from run_experiments import CONDITION_NAMES
 
 
 def compute_substr_scores():
@@ -110,7 +111,7 @@ def save_fitness_animation(path, expt_data):
     # Grab the data we need and split it by generation.
     fitness_by_generation = expt_data.select(
         'fitness'
-    ).to_numpy().reshape(NUM_GENERATIONS, -1)
+    ).to_numpy().reshape(INNER_GENERATIONS, -1)
 
     # Set up a figure with no decorations or padding.
     fig = plt.figure(frameon=False, figsize=(8, 4.5))
@@ -123,23 +124,16 @@ def save_fitness_animation(path, expt_data):
     def animate_func(generation):
         image.set_array(make_pop_map(fitness_by_generation[generation]))
         return image
-    anim = FuncAnimation(fig, animate_func, NUM_GENERATIONS, interval=100)
-    anim.save(path / 'fitness_map.gif', writer='pillow')
+    anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
+    anim.save(path / 'fitness_map.mp4', writer='ffmpeg')
 
 
 def save_all_results():
-    # Load the full state history for all our experiments, and prepare to
-    # generate several visualizations for each condition (with progress bar)
-    history = pl.read_parquet('output/history.parquet')
-    conditions = history['condition'].unique().to_list()
-    num_artifacts = 4 * len(conditions)
+    num_artifacts = 4 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
-
-    # For each experiment condition...
-    for name in conditions:
-        path = Path(f'output/{name}')
-        path.mkdir(exist_ok=True)
-        expt_data = history.filter(pl.col('condition') == name)
+    for name in CONDITION_NAMES:
+        path = OUTPUT_PATH / name
+        expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
         # Save an animation of fitness over time.
         save_fitness_animation(path, expt_data)
@@ -148,7 +142,7 @@ def save_all_results():
         # Restrict to the last generation and render maps of the final fitnes
         # and HIFF scores.
         expt_data = expt_data.filter(
-            pl.col('generation') == NUM_GENERATIONS - 1
+            pl.col('generation') == INNER_GENERATIONS - 1
         )
 
         save_fitness_map(path, name, expt_data)
@@ -158,7 +152,7 @@ def save_all_results():
         progress.update()
 
         # Load and render the environment where this experiment happened.
-        env_data = np.load(path / f'env.npz')
+        env_data = np.load(path / 'env.npz')
         save_env_map(path, name, env_data)
         progress.update()
 

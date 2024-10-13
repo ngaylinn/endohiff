@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import taichi as ti
 
 BITSTR_POWER = 6
@@ -12,4 +14,6 @@ ENVIRONMENT_SHAPE = (64, 36)
 # A square number makes visualizing results easier.
 CARRYING_CAPACITY = 25
 
-NUM_GENERATIONS = 100
+INNER_GENERATIONS = 100
+
+OUTPUT_PATH = Path('output')

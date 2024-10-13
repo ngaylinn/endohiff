@@ -2,7 +2,7 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, NUM_GENERATIONS)
+    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from hiff import weighted_hiff
 from reproduction import mutation
 
@@ -31,7 +31,7 @@ class InnerPopulation:
     def __init__(self):
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
         self.size = np.prod(self.shape)
-        self.pop = Individual.field(shape=(NUM_GENERATIONS,) + self.shape)
+        self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
         self.next_id = ti.field(dtype=ti.uint32, shape=())
         self.next_id[None] = 1
 
