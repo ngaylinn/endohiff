@@ -3,20 +3,22 @@ import polars as pl
 from tqdm import trange
 
 from constants import (
-    ALL_ENVIRONMENTS_SHAPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, OUTER_GENERATIONS)
+    ALL_ENVIRONMENTS_SHAPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE,
+    INNER_GENERATIONS, NUM_HOST_ENVIRONMENTS, OUTER_GENERATIONS)
 from inner_population import InnerPopulation
 from outer_population import OuterPopulation
 
-# TODO: This should include the environment and trial indices, yah?
 # Compute an index enumerating the generation number and position of each
 # individual in a population over evolutionary time.
+e = NUM_HOST_ENVIRONMENTS
 g = INNER_GENERATIONS
 w, h = ENVIRONMENT_SHAPE
 c = CARRYING_CAPACITY
 index = pl.DataFrame({
-    'inner_generation': np.arange(g).repeat(w * h * c),
-    'x': np.tile(np.arange(w).repeat(h * c), g),
-    'y': np.tile(np.arange(h).repeat(c), g * w),
+    'host_environment': np.arange(e).repeat(g * w * h * c),
+    'inner_generation': np.tile(np.arange(g).repeat(w * h * c), e),
+    'x': np.tile(np.arange(w).repeat(h * c), e * g),
+    'y': np.tile(np.arange(h).repeat(c), e * g * w),
 })
 
 
@@ -39,8 +41,9 @@ def summarize(inner_population, inner_log):
     )
 
 
+# TODO: Run multiple trials for statistical significance?
 def evolve(environment):
-    # Setup
+    # Setup the inner population.
     inner_population = InnerPopulation()
     inner_log = None
 
@@ -88,8 +91,7 @@ def evolve(environment):
             outer_log = pl.concat([outer_log, summary])
             if outer_generation + 1 < OUTER_GENERATIONS:
                 # TODO: Make this evolutionary!
-                outer_population.randomize()
-                #outer_population.propagate()
+                outer_population.propagate()
 
     # Return the full outer log and the inner log for the last generation.
     return inner_log, outer_log

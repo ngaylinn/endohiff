@@ -3,16 +3,16 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    ALL_ENVIRONMENTS_SHAPE, BITSTR_POWER, BITSTR_LEN, CARRYING_CAPACITY,
-    ENVIRONMENT_SHAPE, NUM_GENERATIONS, NUM_TRIALS, NUM_WEIGHTS)
+    ALL_ENVIRONMENTS_SHAPE, BITSTR_POWER, BITSTR_LEN, NUM_HOST_ENVIRONMENTS,
+    NUM_WEIGHTS)
 from environment import Environment
 
 class OuterPopulation:
     def __init__(self):
         self.cppns = CppnPopulation(
-            # We will evolve NUM_TRIALS populations in parallel, each with
-            # CARRYING_CAPCITY individual CPPNs.
-            (NUM_TRIALS, CARRYING_CAPACITY),
+            # My laptop can't handle running multiple trials at a time, so we
+            # just use a single population of NUM_HOST_ENVIRONMENTS CPPNs.
+            (1, NUM_HOST_ENVIRONMENTS),
             # Each CPPN is used to convolve a 3D volume: the bitstring at each
             # position in a 2D space. The CPPN output is one per substring
             # length (so there is a 1D map for each length 2 substring at each
@@ -20,7 +20,7 @@ class OuterPopulation:
             # well as one additional output for the minimum fitness.
             (3, BITSTR_POWER + 1),
             # Associate each individual in this population with a single world.
-            np.array(list(np.ndindex(NUM_TRIALS, CARRYING_CAPACITY))),
+            np.array(list(np.ndindex(1, NUM_HOST_ENVIRONMENTS))),
             # TODO: Use a matchmaker for selection.
             None)
         self.env = Environment()
