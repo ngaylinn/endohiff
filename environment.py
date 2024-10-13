@@ -2,15 +2,16 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    BITSTR_POWER, BITSTR_LEN,  ENVIRONMENT_SHAPE, NUM_WEIGHTS, MAX_HIFF)
+    ALL_ENVIRONMENTS_SHAPE, BITSTR_POWER, BITSTR_LEN,  ENVIRONMENT_SHAPE,
+    NUM_WEIGHTS, MAX_HIFF)
+
 
 @ti.data_oriented
 class Environment:
     def __init__(self):
-        self.min_fitness = ti.field(
-            dtype=float, shape=ENVIRONMENT_SHAPE)
+        self.min_fitness = ti.field(dtype=float, shape=ALL_ENVIRONMENTS_SHAPE)
         self.weights = ti.Vector.field(
-            n=NUM_WEIGHTS, dtype=float, shape=ENVIRONMENT_SHAPE)
+            n=NUM_WEIGHTS, dtype=float, shape=ALL_ENVIRONMENTS_SHAPE)
 
     def to_numpy(self):
         return {
@@ -29,9 +30,9 @@ def make_flat_environment():
 def make_random_environment():
     env = Environment()
     env.min_fitness.from_numpy(
-        np.random.rand(*ENVIRONMENT_SHAPE).astype(np.float32) * MAX_HIFF)
+        np.random.rand(*ALL_ENVIRONMENTS_SHAPE).astype(np.float32) * MAX_HIFF)
     env.weights.from_numpy(
-        np.random.rand(*ENVIRONMENT_SHAPE, NUM_WEIGHTS).astype(np.float32))
+        np.random.rand(*ALL_ENVIRONMENTS_SHAPE, NUM_WEIGHTS).astype(np.float32))
     return env
 
 
@@ -63,7 +64,8 @@ def make_designed_environment():
             ).repeat(eh, axis=1),
             axis=2
         ).repeat(substr_count, axis=2)
-        weights[:, :, w:w+substr_count] = substr_weights
+        weights[:, :, w:w+substr_count] = np.broadcast_to(
+            substr_weights, ALL_ENVIRONMENTS_SHAPE)
         w += substr_count
 
     # The min fitness threshold simply scales linearly from the top to the
@@ -71,7 +73,7 @@ def make_designed_environment():
     # across the full range of weights.
     min_fitness = np.broadcast_to(
         np.linspace(0.0, MAX_HIFF, eh, dtype=np.float32),
-        ENVIRONMENT_SHAPE)
+        ALL_ENVIRONMENTS_SHAPE)
 
     env = Environment()
     env.min_fitness.from_numpy(min_fitness)

@@ -2,7 +2,7 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
+    ALL_ENVIRONMENTS_SHAPE, BITSTR_DTYPE, CARRYING_CAPACITY, INNER_GENERATIONS)
 from hiff import weighted_hiff
 from reproduction import mutation
 
@@ -29,42 +29,43 @@ DEAD_ID = 0
 @ti.data_oriented
 class InnerPopulation:
     def __init__(self):
-        self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
+        self.shape = ALL_ENVIRONMENTS_SHAPE + (CARRYING_CAPACITY,)
         self.size = np.prod(self.shape)
         self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
         self.next_id = ti.field(dtype=ti.uint32, shape=())
         self.next_id[None] = 1
 
     @ti.func
-    def get_next_id(self, x, y, i):
+    def get_next_id(self, e, x, y, i):
         # We generate a full population in every cell in parallel, so
         # figure out what the position of this individual would be if we
         # were computing that in sequence, and use that for setting its id.
-        offset = x * self.shape[1] * self.shape[2] + y * self.shape[2] + i
+        offset = (
+            e * self.shape[1] * self.shape[2] * self.shape[3] +
+            x * self.shape[2] * self.shape[3] +
+            y * self.shape[3] +
+            i)
         return self.next_id[None] + offset
 
     @ti.kernel
     def randomize(self):
-        for x, y, i in ti.ndrange(*self.shape):
-            self.pop[0, x, y, i] = Individual(
+        for e, x, y, i in ti.ndrange(*self.shape):
+            self.pop[0, e, x, y, i] = Individual(
                 bitstr=ti.cast(ti.random(int), BITSTR_DTYPE),
-                id=self.get_next_id(x, y, i), parent=0, fitness=0.0, hiff=0)
+                id=self.get_next_id(e, x, y, i), parent=0, fitness=0.0, hiff=0)
         self.next_id[None] += ti.static(self.size)
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: int) -> ti.uint32:
-        best_hiff = ti.cast(0, ti.uint32)
-        for x, y, i in ti.ndrange(*self.shape):
+        for e, x, y, i in ti.ndrange(*self.shape):
             fitness, hiff = 0.0, 0
             # Only evaluate fitness of individuals that are alive.
-            individual = self.pop[g, x, y, i]
+            individual = self.pop[g, e, x, y, i]
             if individual.id != DEAD_ID:
                 fitness, hiff = weighted_hiff(
                     individual.bitstr, environment.weights[x, y])
-            ti.atomic_max(best_hiff, hiff)
-            self.pop[g, x, y, i].fitness = fitness
-            self.pop[g, x, y, i].hiff = hiff
-        return best_hiff
+            self.pop[g, e, x, y, i].fitness = fitness
+            self.pop[g, e, x, y, i].hiff = hiff
 
     @ti.kernel
     def propagate(self, environment: ti.template(), g: int):
@@ -87,6 +88,13 @@ class InnerPopulation:
                 individual.hiff = 0
                 self.pop[g + 1, x, y, i] = individual
         self.next_id[None] += ti.static(self.size)
+
+    @ti.kernel
+    def compute_diversity(self, diversity: ti.types.ndarray(dtype=ti.float32, ndim=4)):
+        for g, e, x, y in ti.ndrange(*self.shape[:-1]):
+            # TODO: Compute bitwise standard deviation for each sub population.
+            diversity[g, e, x, y] = 0.0
+
 
     def to_numpy(self):
         return self.pop.to_numpy()
