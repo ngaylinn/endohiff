@@ -2,7 +2,8 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    ALL_ENVIRONMENTS_SHAPE, BITSTR_DTYPE, CARRYING_CAPACITY, INNER_GENERATIONS)
+    ALL_ENVIRONMENTS_SHAPE, BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY,
+    ENVIRONMENT_SHAPE, INNER_GENERATIONS, NUM_HOST_ENVIRONMENTS)
 from hiff import weighted_hiff
 from reproduction import mutation
 
@@ -90,10 +91,35 @@ class InnerPopulation:
         self.next_id[None] += ti.static(self.size)
 
     @ti.kernel
-    def compute_diversity(self, diversity: ti.types.ndarray(dtype=ti.float32, ndim=4)):
-        for g, e, x, y in ti.ndrange(*self.shape[:-1]):
-            # TODO: Compute bitwise standard deviation for each sub population.
-            diversity[g, e, x, y] = 0.0
+    def compute_diversity(self, diversity: ti.types.ndarray(ndim=4)):
+        ndrange = (INNER_GENERATIONS, NUM_HOST_ENVIRONMENTS,) + ENVIRONMENT_SHAPE
+        for g, e, x, y in ti.ndrange(*ndrange):
+            # Calculate how far each bitstring in this subpopulation differs
+            # from the average bitstring in this location.
+            deviation = ti.Vector([0.0] * CARRYING_CAPACITY)
+
+            # For each bit in the bitstring...
+            for b in range(BITSTR_LEN):
+                # Count how many individuals here have a 1 in this position.
+                one_count = 0
+                for i in range(CARRYING_CAPACITY):
+                    bitstr = self.pop[g, e, x, y, i].bitstr
+                    bit = (bitstr >> b) & ti.cast(0b1, BITSTR_DTYPE)
+                    one_count += ti.cast(bit, int)
+
+                # Now sum up how much each individual differs from the average
+                # bitstring. Note that this accumulates across all positions in
+                # the bitstring.
+                mean = one_count / CARRYING_CAPACITY
+                for i in range(CARRYING_CAPACITY):
+                    bitstr = self.pop[g, e, x, y, i].bitstr
+                    bit = (bitstr >> b) & ti.cast(0b1, BITSTR_DTYPE)
+                    deviation[i] += bit - mean
+
+            # Compute the variance and then standard deviation for all bit
+            # positions to use as a diversity score.
+            variance = (deviation ** 2).sum() / CARRYING_CAPACITY
+            diversity[g, e, x, y] = ti.sqrt(variance)
 
 
     def to_numpy(self):

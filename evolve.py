@@ -37,6 +37,8 @@ def summarize(inner_population, inner_log):
         pl.col('fitness').mean(),
         pl.col('hiff').max(),
     ).with_columns(
+        # Instead of keeping all the bit strings, just keep aggregate metrics
+        # about them.
         diversity=diversity
     )
 
