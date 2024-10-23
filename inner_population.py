@@ -77,7 +77,7 @@ class InnerPopulation:
                 self.pop[g + 1, x, y, i] = DEAD
             else:
                 # select another individual from same sub-pop for crossover
-                mate_index = ti.random(ti.i32) % self.size
+                mate_index = ti.random(ti.i32) % CARRYING_CAPACITY
                 mate = self.pop[g, x, y, mate_index]
 
                 # creating a child from the individual and performing crossover

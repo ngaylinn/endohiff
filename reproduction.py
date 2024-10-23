@@ -1,6 +1,6 @@
 import taichi as ti
 
-from constants import BITSTR_DTYPE
+from constants import BITSTR_DTYPE, BITSTR_LEN
 
 
 # The probability of flipping a bit is 1/(2**MUTATION_MAGNITUDE) ~= 0.016
@@ -20,7 +20,7 @@ def mutation() -> BITSTR_DTYPE:
 
 @ti.func
 def crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
-    crossover_point = ti.random(ti.i32) % 32  # Assuming 32-bit bitstrings
+    crossover_point = ti.random(ti.i32) % BITSTR_LEN
     mask = (1 << crossover_point) - 1
     child = (parent1 & mask) | (parent2 & ~mask)
     return child
