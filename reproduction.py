@@ -18,5 +18,10 @@ def mutation() -> BITSTR_DTYPE:
         mutation &= ti.cast(ti.random(int), BITSTR_DTYPE)
     return mutation
 
-
+@ti.func
+def crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
+    crossover_point = ti.random(ti.i32) % 32  # Assuming 32-bit bitstrings
+    mask = (1 << crossover_point) - 1
+    child = (parent1 & mask) | (parent2 & ~mask)
+    return child
 

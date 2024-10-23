@@ -4,7 +4,7 @@ import taichi as ti
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from hiff import weighted_hiff
-from reproduction import mutation
+from reproduction import mutation, crossover
 
 
 @ti.dataclass
@@ -70,19 +70,44 @@ class InnerPopulation:
         # individuals, crossover, or migration.
         for x, y, i in ti.ndrange(*self.shape):
             individual = self.pop[g, x, y, i]
+
             # If this individual isn't fit enough to survive here...
             if individual.fitness < environment.min_fitness[x, y]:
                 # Then mark it as dead in the next generation.
                 self.pop[g + 1, x, y, i] = DEAD
             else:
+                # select another individual from same sub-pop for crossover
+                mate_index = ti.random(ti.i32) % self.size
+                mate = self.pop[g, x, y, mate_index]
+
+                # creating a child from the individual and performing crossover
+                child = individual
+                child_bitstr = crossover(individual.bitstr, mate.bitstr)
+
+                # Apply mutation to new child
+                # TODO: do I need to check mutation rate or does that happen in the mutation function itself? 
+                # if ti.random() < self.mutation_rate:
+                child.bitstr ^= mutation()  
+
+                #update child's metadata
+                child.bitstr = child_bitstr
+                child.parent = individual.id
+                child.id = self.get_next_id(x, y, i)
+                child.fitness = 0.0
+                child.hiff = 0 
+
+                # Place the child in the next generation
+                self.pop[g + 1, x, y, i] = child          
+
+                # TODO: get rid of original code once everything works :)
                 # Otherwise, make a random variation of this individual in the
                 # same spot for the next generation.
-                individual.bitstr ^= mutation()
-                individual.parent = individual.id
-                individual.id = self.get_next_id(x, y, i)
-                individual.fitness = 0.0
-                individual.hiff = 0
-                self.pop[g + 1, x, y, i] = individual
+                # individual.bitstr ^= mutation()
+                # individual.parent = individual.id
+                # individual.id = self.get_next_id(x, y, i)
+                # individual.fitness = 0.0
+                # individual.hiff = 0
+                # self.pop[g + 1, x, y, i] = individual
         self.next_id[None] += ti.static(self.size)
 
     def to_numpy(self):
