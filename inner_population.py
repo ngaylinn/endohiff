@@ -2,7 +2,7 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
+    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, TOURNAMENT_SIZE, MUTATION_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover
 
@@ -77,8 +77,8 @@ class InnerPopulation:
                 self.pop[g + 1, x, y, i] = DEAD
             else:
                 # select another individual from same sub-pop for crossover
-                mate_index = ti.random(ti.i32) % CARRYING_CAPACITY
-                mate = self.pop[g, x, y, mate_index]
+                # Select a mate via tournament selection for crossover
+                mate = self.tournament_selection(x, y, g)
 
                 # creating a child from the individual and performing crossover
                 child = individual
@@ -86,8 +86,8 @@ class InnerPopulation:
 
                 # Apply mutation to new child
                 # TODO: do I need to check mutation rate or does that happen in the mutation function itself? 
-                # if ti.random() < self.mutation_rate:
-                child.bitstr ^= mutation()  
+                if ti.random() < MUTATION_RATE:
+                    child.bitstr ^= mutation() 
 
                 #update child's metadata
                 child.bitstr = child_bitstr
@@ -99,16 +99,24 @@ class InnerPopulation:
                 # Place the child in the next generation
                 self.pop[g + 1, x, y, i] = child          
 
-                # TODO: get rid of original code once everything works :)
-                # Otherwise, make a random variation of this individual in the
-                # same spot for the next generation.
-                # individual.bitstr ^= mutation()
-                # individual.parent = individual.id
-                # individual.id = self.get_next_id(x, y, i)
-                # individual.fitness = 0.0
-                # individual.hiff = 0
-                # self.pop[g + 1, x, y, i] = individual
         self.next_id[None] += ti.static(self.size)
 
     def to_numpy(self):
         return self.pop.to_numpy()
+    
+    @ti.func
+    def tournament_selection(self, x: int, y: int, g: int) -> ti.template():
+        """Performs a simple tournament selection within a sub-population"""
+        best_individual = DEAD
+        best_fitness = -float('inf')
+        
+        # Compare TOURNAMENT_SIZE random individuals
+        for _ in range(TOURNAMENT_SIZE):
+            competitor_index = ti.random(ti.i32) % CARRYING_CAPACITY
+            competitor = self.pop[g, x, y, competitor_index]
+            
+            if competitor.fitness > best_fitness:
+                best_individual = competitor
+                best_fitness = competitor.fitness
+
+        return best_individual

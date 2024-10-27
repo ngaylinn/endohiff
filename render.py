@@ -34,6 +34,8 @@ def render_env_map(env_data):
     # TODO: It might be better to compute what percent of randomly generated
     # bit strings could survive here, rather than basing this on the range of
     # possible fitness scores.
+
+    
     max_scores = (env_data['weights'] * SUBSTR_SCORES).sum(axis=2)
     min_scores = env_data['min_fitness']
     survivability = (max_scores - min_scores) / (MAX_HIFF - MIN_HIFF)
