@@ -1,6 +1,7 @@
 import taichi as ti
 
-from constants import BITSTR_DTYPE, BITSTR_LEN
+from constants import (
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, TOURNAMENT_SIZE)
 
 
 # The probability of flipping a bit is 1/(2**MUTATION_MAGNITUDE) ~= 0.016
@@ -25,3 +26,19 @@ def crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
     child = (parent1 & mask) | (parent2 & ~mask)
     return child
 
+@ti.func
+def tournament_selection(pop: ti.template(), g: int, x: int, y: int) -> ti.template():
+    """Performs a simple tournament selection within a sub-population"""
+    best_individual = pop[g, x, y, 0]
+    best_fitness = -float('inf')
+
+    # Compare TOURNAMENT_SIZE random individuals
+    for _ in range(TOURNAMENT_SIZE):
+        competitor_index = ti.random(ti.i32) % CARRYING_CAPACITY
+        competitor = pop[g, x, y, competitor_index]
+
+        if competitor.fitness > best_fitness:
+            best_individual = competitor
+            best_fitness = competitor.fitness
+
+    return best_individual
