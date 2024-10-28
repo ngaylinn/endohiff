@@ -2,7 +2,8 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
+    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
+    MAX_POPULATION_SIZE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -30,7 +31,6 @@ DEAD_ID = 0
 class InnerPopulation:
     def __init__(self):
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
-        self.size = np.prod(self.shape)
         self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
         self.next_id = ti.field(dtype=ti.uint32, shape=())
         self.next_id[None] = 1
@@ -49,7 +49,7 @@ class InnerPopulation:
             self.pop[0, x, y, i] = Individual(
                 bitstr=ti.cast(ti.random(int), BITSTR_DTYPE),
                 id=self.get_next_id(x, y, i), parent=0, fitness=0.0, hiff=0)
-        self.next_id[None] += ti.static(self.size)
+        self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: int):
@@ -96,7 +96,7 @@ class InnerPopulation:
                 # Place the child in the next generation
                 self.pop[g + 1, x, y, i] = child
 
-        self.next_id[None] += ti.static(self.size)
+        self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
 
     def to_numpy(self):
         return self.pop.to_numpy()

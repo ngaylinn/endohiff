@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import taichi as ti
 
 BITSTR_POWER = 6
@@ -13,6 +14,8 @@ MAX_HIFF = BITSTR_LEN * (BITSTR_POWER + 1)
 ENVIRONMENT_SHAPE = (64, 36)
 # A square number makes visualizing results easier.
 CARRYING_CAPACITY = 25
+
+MAX_POPULATION_SIZE = np.prod(ENVIRONMENT_SHAPE) * CARRYING_CAPACITY
 
 INNER_GENERATIONS = 100
 
