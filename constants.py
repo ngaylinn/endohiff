@@ -21,4 +21,8 @@ INNER_GENERATIONS = 100
 
 TOURNAMENT_SIZE = 2
 
+# The chance that an cell vacated due to death will be filled in the next
+# generation.
+REFILL_RATE = 0.5
+
 OUTPUT_PATH = Path('output')

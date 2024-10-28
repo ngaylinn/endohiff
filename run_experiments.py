@@ -6,6 +6,7 @@ from constants import MAX_HIFF, OUTPUT_PATH
 from environment import (
     make_flat_environment, make_random_environment, make_designed_environment)
 from evolve import evolve
+from inner_population import InnerPopulation
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
@@ -44,8 +45,9 @@ def run_experiments():
         path.mkdir(exist_ok=True)
 
         # Run the condition and cache the results.
+        inner_population = InnerPopulation()
         environment = make_environment()
-        inner_log = evolve(environment)
+        inner_log = evolve(inner_population, environment)
 
         # Save the experiment logs to disk.
         inner_log.write_parquet(path / 'inner_log.parquet')

@@ -1,9 +1,8 @@
-import numpy as np
 import taichi as ti
 
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
-    MAX_POPULATION_SIZE)
+    MAX_POPULATION_SIZE, REFILL_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -30,6 +29,8 @@ DEAD_ID = 0
 @ti.data_oriented
 class InnerPopulation:
     def __init__(self):
+        self.refill_rate = REFILL_RATE
+        self.random_refill = True
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
         self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
         self.next_id = ti.field(dtype=ti.uint32, shape=())
@@ -71,6 +72,19 @@ class InnerPopulation:
         for x, y, i in ti.ndrange(*self.shape):
             parent = self.pop[g, x, y, i]
 
+            # If this cell was unoccupied in the last generation...
+            if parent.id == DEAD_ID:
+                # Maybe let another individual spawn into this cell.
+                if ti.random() < self.refill_rate:
+                    # Either pick a parent at random from the sub population at
+                    # this location, or do tournament selection to pick a more
+                    # fit parent.
+                    if self.random_refill:
+                        parent_index = ti.random(int) %  CARRYING_CAPACITY
+                        parent = self.pop[g, x, y, parent_index]
+                    else:
+                        parent = tournament_selection(self.pop, g, x, y)
+
             # If this individual isn't fit enough to survive here...
             if parent.fitness < environment.min_fitness[x, y]:
                 # Then mark it as dead in the next generation.
@@ -100,4 +114,3 @@ class InnerPopulation:
 
     def to_numpy(self):
         return self.pop.to_numpy()
-
