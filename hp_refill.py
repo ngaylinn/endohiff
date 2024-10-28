@@ -11,7 +11,7 @@ NUM_REPETITIONS = 10
 
 def print_summary(df, file=None):
     # Print summaries...
-    pl.Config(tbl_rows=len(CONDITIONS) * 3 * 2)
+    pl.Config(tbl_rows=len(CONDITIONS) * 3 * 2, set_fmt_float='full')
     print('Combined effect across experiments:', file=file)
     print(df, file=file)
 
@@ -20,7 +20,6 @@ def print_summary(df, file=None):
     print(df.group_by(
         'condition', 'refill_rate',
         maintain_order=True
-
     ).agg(
         pl.col('population_size').mean(),
         pl.col('hiff').mean()
@@ -31,7 +30,6 @@ def print_summary(df, file=None):
     print(df.group_by(
         'condition', 'random_refill',
         maintain_order=True
-
     ).agg(
         pl.col('population_size').mean(),
         pl.col('hiff').mean()
