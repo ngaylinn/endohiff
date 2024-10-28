@@ -70,7 +70,7 @@ def make_designed_environment():
     # bottom of the environment, creating a smooth gradient of habitibality
     # across the full range of weights.
     min_fitness = np.broadcast_to(
-        np.linspace(0.0, MAX_HIFF, eh, dtype=np.float32),
+        np.geomspace(1, MAX_HIFF, eh, dtype=np.float32),
         ENVIRONMENT_SHAPE)
 
     env = Environment()
