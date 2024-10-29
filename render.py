@@ -34,8 +34,6 @@ def render_env_map(env_data):
     # TODO: It might be better to compute what percent of randomly generated
     # bit strings could survive here, rather than basing this on the range of
     # possible fitness scores.
-
-    
     max_scores = (env_data['weights'] * SUBSTR_SCORES).sum(axis=2)
     min_scores = env_data['min_fitness']
     survivability = (max_scores - min_scores) / (MAX_HIFF - MIN_HIFF)
@@ -86,7 +84,7 @@ def render_pop_map(pop_map):
     # Render the population data to a figure, with a color scale proportional
     # to the MAX_HIFF score and dead cells rendered in black.
     image = plt.imshow(pop_map, plt.get_cmap().with_extremes(under='black'))
-    plt.clim(1e-6, MAX_HIFF)
+    plt.clim(1, MAX_HIFF)
     return image
 
 
