@@ -1,7 +1,7 @@
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, TOURNAMENT_SIZE)
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, TOURNAMENT_SIZE, CROSSOVER_RATE)
 
 
 # The probability of flipping a bit is 1/(2**MUTATION_MAGNITUDE) ~= 0.016
@@ -24,6 +24,26 @@ def crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
     crossover_point = ti.random(ti.i32) % BITSTR_LEN
     mask = (1 << crossover_point) - 1
     child = (parent1 & mask) | (parent2 & ~mask)
+    return child
+
+@ti.func
+def diverse_crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
+    # added 10/29 (Anna)
+    # adding some diversity to crossover trying to (kind of) simulate Horizontal Gene Transfer   
+    # initializing child to just be parent1  
+    child = parent1 #NOTE: not sure how to do a safer copy in taichi! 
+    
+    # To crossover or not to crossover ...
+    if ti.random() < CROSSOVER_RATE:  
+        crossover_point = ti.random(ti.i32) % BITSTR_LEN
+        mask = (1 << crossover_point) - 1
+        child = (parent1 & mask) | (parent2 & ~mask)
+    else:
+        # randomly choose parent1 or parent2 to be the not crossover of our child
+        if ti.random() < 0.5:
+            child = parent1
+        else:
+            child = parent2
     return child
 
 @ti.func

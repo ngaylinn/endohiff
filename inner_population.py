@@ -1,10 +1,12 @@
 import taichi as ti
+import pandas as pd
+import numpy as np
 
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
     MAX_POPULATION_SIZE, REFILL_RATE)
 from hiff import weighted_hiff
-from reproduction import mutation, crossover, tournament_selection
+from reproduction import mutation, crossover, diverse_crossover, tournament_selection
 
 
 @ti.dataclass
@@ -21,6 +23,7 @@ class Individual:
     # The raw HIFF score of this individual.
     hiff: ti.uint32
 
+
 # Unoccupied spaces are marked with a DEAD individual (all fields set to 0)
 DEAD = Individual()
 DEAD_ID = 0
@@ -35,6 +38,13 @@ class InnerPopulation:
         self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
         self.next_id = ti.field(dtype=ti.uint32, shape=())
         self.next_id[None] = 1
+        self.fitness_values = ti.Vector.field(1, dtype=ti.float32, shape=(CARRYING_CAPACITY,))  # Temporary field for fitness values
+        
+        self.pop_diversity = ti.field(dtype=ti.float32, shape=())  # Declare as a field
+        self.pop_sum_fitness = ti.field(dtype=ti.float32, shape=())  # Sum of all the fitnesses
+        
+        self.pop_diversity[None] = 0.0  # Initialize to 0
+        self.pop_sum_fitness[None] = 0.0  # Initialize to 0
 
     @ti.func
     def get_next_id(self, x, y, i):
@@ -54,6 +64,11 @@ class InnerPopulation:
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: int):
+        fitness_sum = 0.0
+        count = 0
+        # Variables for calculating standard deviation
+        fitness_squared_sum = 0.0
+
         for x, y, i in ti.ndrange(*self.shape):
             fitness, hiff = 0.0, 0
             # Only evaluate fitness of individuals that are alive.
@@ -61,8 +76,21 @@ class InnerPopulation:
             if individual.id != DEAD_ID:
                 fitness, hiff = weighted_hiff(
                     individual.bitstr, environment.weights[x, y])
+                fitness_sum += fitness
+                fitness_squared_sum += fitness ** 2  # Sum of squares for std deviation calculation
+                count += 1
+                self.fitness_values[i][0] = fitness  # Store fitness value in the temporary field
             self.pop[g, x, y, i].fitness = fitness
             self.pop[g, x, y, i].hiff = hiff
+
+        # Calculate diversity and total fitness
+        if count > 0:
+            average_fitness = fitness_sum / count
+            variance = (fitness_squared_sum / count) - (average_fitness ** 2)
+            self.pop_diversity[None] = ti.sqrt(variance)  # Standard deviation
+        else:
+            self.pop_diversity[None] = 0.0  # No individuals
+        self.pop_sum_fitness[None] = fitness_sum  # Assigning to the field
 
     @ti.kernel
     def propagate(self, environment: ti.template(), g: int):
@@ -96,7 +124,7 @@ class InnerPopulation:
 
                 # creating a child from the individual and performing crossover
                 child = Individual()
-                child.bitstr = crossover(parent.bitstr, mate.bitstr)
+                child.bitstr = diverse_crossover(parent.bitstr, mate.bitstr) #CHANGED TO UNIFORM_CROSSOVER
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
@@ -114,3 +142,20 @@ class InnerPopulation:
 
     def to_numpy(self):
         return self.pop.to_numpy()
+    
+    # def log_population(self, g: int, filename: str):
+    #     # added 10/29 (Anna)
+    #     # adding a method to log bit strings (for diversity measures)
+    #     # (NOTE: not sure if this is something you already have implemented somewhere else ...)
+    #     data = []
+    #     for x, y, i in ti.ndrange(*self.shape):
+    #         individual = self.pop[g, x, y, i]
+    #         if individual.id != DEAD_ID:
+    #             data.append(individual.bitstr.to_numpy())
+    #     df = pd.DataFrame(data)
+    #     df.to_parquet(filename)
+
+    # def get_population_diversity(self):
+    #     # Convert fitness values to NumPy for std deviation calculation
+    #     fitness_np = self.fitness_values.to_numpy()[:CARRYING_CAPACITY].flatten()  # Get valid fitness values
+    #     return np.std(fitness_np)  # Calculate and return the standard deviation

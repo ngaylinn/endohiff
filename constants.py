@@ -21,6 +21,8 @@ INNER_GENERATIONS = 100
 
 TOURNAMENT_SIZE = 2
 
+CROSSOVER_RATE = 0.5 #for uniform_crossover, frequency of crossover
+
 # The chance that an cell vacated due to death will be filled in the next
 # generation.
 REFILL_RATE = 0.5
