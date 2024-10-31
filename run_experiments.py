@@ -53,9 +53,6 @@ def run_experiments():
         # Save the experiment logs to disk.
         inner_log.write_parquet(path / 'inner_log.parquet')
 
-        # TODO: DELETE WHEN DONE
-        print(inner_log.columns)
-
         # Save the final environment for this experiment. Currently this is
         # always static, but eventually it will be evolved.
         np.savez(path / 'env.npz', **environment.to_numpy())
