@@ -14,6 +14,7 @@ index = pl.DataFrame({
     'generation': np.arange(g).repeat(w * h * c),
     'x': np.tile(np.arange(w).repeat(h * c), g),
     'y': np.tile(np.arange(h).repeat(c), g * w),
+    'diversity': np.arange(g).repeat(w * h * c),
 })
 
 

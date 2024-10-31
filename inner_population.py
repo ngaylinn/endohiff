@@ -40,11 +40,10 @@ class InnerPopulation:
         self.next_id[None] = 1
         self.fitness_values = ti.Vector.field(1, dtype=ti.float32, shape=(CARRYING_CAPACITY,))  # Temporary field for fitness values
         
-        self.pop_diversity = ti.field(dtype=ti.float32, shape=())  # Declare as a field
-        self.pop_sum_fitness = ti.field(dtype=ti.float32, shape=())  # Sum of all the fitnesses
-        
-        self.pop_diversity[None] = 0.0  # Initialize to 0
-        self.pop_sum_fitness[None] = 0.0  # Initialize to 0
+        # holding diversity over generations
+        self.pop_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
+        self.pop_sum_fitness = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))  # Sum of all the fitnesses
+    
 
     @ti.func
     def get_next_id(self, x, y, i):
@@ -87,10 +86,10 @@ class InnerPopulation:
         if count > 0:
             average_fitness = fitness_sum / count
             variance = (fitness_squared_sum / count) - (average_fitness ** 2)
-            self.pop_diversity[None] = ti.sqrt(variance)  # Standard deviation
+            self.pop_diversity[g] = ti.sqrt(variance)  # Standard deviation
         else:
-            self.pop_diversity[None] = 0.0  # No individuals
-        self.pop_sum_fitness[None] = fitness_sum  # Assigning to the field
+            self.pop_diversity[g] = 0.0  # No individuals
+        self.pop_sum_fitness[g] = fitness_sum  # Assigning to the field
 
     @ti.kernel
     def propagate(self, environment: ti.template(), g: int):
@@ -142,20 +141,3 @@ class InnerPopulation:
 
     def to_numpy(self):
         return self.pop.to_numpy()
-    
-    # def log_population(self, g: int, filename: str):
-    #     # added 10/29 (Anna)
-    #     # adding a method to log bit strings (for diversity measures)
-    #     # (NOTE: not sure if this is something you already have implemented somewhere else ...)
-    #     data = []
-    #     for x, y, i in ti.ndrange(*self.shape):
-    #         individual = self.pop[g, x, y, i]
-    #         if individual.id != DEAD_ID:
-    #             data.append(individual.bitstr.to_numpy())
-    #     df = pd.DataFrame(data)
-    #     df.to_parquet(filename)
-
-    # def get_population_diversity(self):
-    #     # Convert fitness values to NumPy for std deviation calculation
-    #     fitness_np = self.fitness_values.to_numpy()[:CARRYING_CAPACITY].flatten()  # Get valid fitness values
-    #     return np.std(fitness_np)  # Calculate and return the standard deviation

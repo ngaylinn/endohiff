@@ -34,32 +34,6 @@ def print_summary(name, expt_data):
     print(f'Example: {best_bitstr[0]:064b}')
     print()
 
-# def compute_population_diversity(filename: str) -> float:
-#     # added 10/29 (Anna)
-#     # takes in inner_population.log_population parquet file and calculates diversity from that
-#     # NOTE: not sure if this is the most efficient way to do this 
-#     df = pd.read_parquet(filename)
-#     bitstrings = df.to_numpy()
-#     allele_frequencies = np.mean(bitstrings, axis=0)
-#     diversity = np.std(allele_frequencies)
-#     return diversity
-
-# def compute_population_diversity(inner_population) -> pl.DataFrame:
-#     # added 10/29 (Anna)
-#     # NOTE: not sure if this is the most efficient way to do this
-#     # Compute diversity based on the inner population
-#     bitstrings = inner_population.to_numpy().get('bitstr')  # Extract the bitstrings
-#     allele_frequencies = np.mean(bitstrings, axis=0)
-#     diversity = np.std(allele_frequencies)
-
-#     # Create a DataFrame to store the results
-#     diversity_log = pl.DataFrame({
-#         'generation': range(inner_population.generations),
-#         'diversity': [diversity] * inner_population.generations  # Repeat the diversity value
-#     })
-
-#     return diversity_log
-
 
 def run_experiments():
     # Make a place to save results.
@@ -78,6 +52,9 @@ def run_experiments():
 
         # Save the experiment logs to disk.
         inner_log.write_parquet(path / 'inner_log.parquet')
+
+        # TODO: DELETE WHEN DONE
+        print(inner_log.columns)
 
         # Save the final environment for this experiment. Currently this is
         # always static, but eventually it will be evolved.

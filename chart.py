@@ -40,9 +40,17 @@ def chart_population_size(path, name, expt_data):
     fig.set(title=f'Population Size ({name})')
     fig.savefig(path / 'pop_size.png', dpi=600)
 
+def chart_diversity(path, name, expt_data):
+    expt_data = expt_data.group_by('generation').agg(pl.col('diversity').max())  # Adjusted to max diversity per generation if needed
+    fig = sns.relplot(data=expt_data, x='generation', y='diversity', kind='line')
+    plt.ylim(0, 1)  # Set limits according to expected diversity range (adjust as needed)
+    fig.set(title=f'Population Diversity ({name})')
+    fig.savefig(path / 'diversity.png', dpi=600)
+
 
 def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
+    # TODO: add diversity chart
     sns.set_theme()
 
     num_artifacts = 4 * len(CONDITION_NAMES)
@@ -62,6 +70,12 @@ def chart_all_results():
 
         chart_population_size(path, name, expt_data)
         progress.update()
+
+        try:
+            chart_diversity(path, name, expt_data)
+            progress.update()
+        except:
+            print("diversity didn't save")
 
 
 if __name__ == '__main__':
