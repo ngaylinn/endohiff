@@ -107,14 +107,14 @@ def save_hiff_map(path, name, expt_data):
     plt.savefig(path / 'hiff_map.png', dpi=600)
     plt.close()
 
-def save_fitness_animation(path, expt_data):
+def save_hiff_animation(path, expt_data):
     # Grab the data we need and split it by generation.
     fitness_by_generation = expt_data.select(
-        'fitness'
+        'hiff'
     ).to_numpy().reshape(INNER_GENERATIONS, -1)
 
     # Set up a figure with no decorations or padding.
-    fig = plt.figure(frameon=False, figsize=(8, 4.5))
+    fig = plt.figure(frameon=False, figsize=(16, 9))
     ax = plt.Axes(fig, [0, 0, 1, 1])
     ax.set_axis_off()
     fig.add_axes(ax)
@@ -125,7 +125,7 @@ def save_fitness_animation(path, expt_data):
         image.set_array(make_pop_map(fitness_by_generation[generation]))
         return image
     anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
-    anim.save(path / 'fitness_map.mp4', writer='ffmpeg')
+    anim.save(path / 'hiff_map.mp4', writer='ffmpeg')
 
 
 def save_all_results():
@@ -136,7 +136,7 @@ def save_all_results():
         expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
         # Save an animation of fitness over time.
-        save_fitness_animation(path, expt_data)
+        save_hiff_animation(path, expt_data)
         progress.update()
 
         # Restrict to the last generation and render maps of the final fitnes
