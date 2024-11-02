@@ -4,8 +4,7 @@ import taichi as ti
 import pandas as pd
 
 from constants import MAX_HIFF, OUTPUT_PATH
-from environment import (
-    make_flat_environment, make_random_environment, make_designed_environment)
+from environment import ENVIRONMENTS
 from evolve import evolve
 from inner_population import InnerPopulation
 
@@ -13,13 +12,8 @@ from inner_population import InnerPopulation
 # times. In practice, this doesn't seem like a problem, so disable the warning.
 ti.init(ti.cuda, unrolling_limit=0)
 
-CONDITIONS = {
-    'control_flat': make_flat_environment,
-    'control_random': make_random_environment,
-    'control_designed': make_designed_environment,
-}
-
-CONDITION_NAMES = list(CONDITIONS.keys())
+# TODO: Once we add an evolved environment, include it here, also.
+CONDITION_NAMES = ENVIRONMENTS.keys()
 
 
 def print_summary(name, expt_data):
@@ -40,7 +34,8 @@ def run_experiments():
     OUTPUT_PATH.mkdir(exist_ok=True)
 
     # Run each experiment condition in turn.
-    for name, make_environment in CONDITIONS.items():
+    # TODO: Once we add an evolved environment, include it here, also.
+    for name, make_environment in ENVIRONMENTS.items():
         # Make a place to put experiment results.
         path = OUTPUT_PATH / name
         path.mkdir(exist_ok=True)
