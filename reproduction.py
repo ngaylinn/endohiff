@@ -29,12 +29,12 @@ def crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
 @ti.func
 def diverse_crossover(parent1: BITSTR_DTYPE, parent2: BITSTR_DTYPE) -> BITSTR_DTYPE:
     # added 10/29 (Anna)
-    # adding some diversity to crossover trying to (kind of) simulate Horizontal Gene Transfer   
-    # initializing child to just be parent1  
-    child = parent1 #NOTE: not sure how to do a safer copy in taichi! 
-    
+    # adding some diversity to crossover trying to (kind of) simulate Horizontal Gene Transfer
+    # initializing child to just be parent1
+    child = parent1 #NOTE: not sure how to do a safer copy in taichi!
+
     # To crossover or not to crossover ...
-    if ti.random() < CROSSOVER_RATE:  
+    if ti.random() < CROSSOVER_RATE:
         crossover_point = ti.random(ti.i32) % BITSTR_LEN
         mask = (1 << crossover_point) - 1
         child = (parent1 & mask) | (parent2 & ~mask)

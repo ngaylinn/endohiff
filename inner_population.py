@@ -39,11 +39,11 @@ class InnerPopulation:
         self.next_id = ti.field(dtype=ti.uint32, shape=())
         self.next_id[None] = 1
         self.fitness_values = ti.Vector.field(1, dtype=ti.float32, shape=(CARRYING_CAPACITY,))  # Temporary field for fitness values
-        
+
         # holding diversity over generations
         self.pop_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.pop_sum_fitness = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))  # Sum of all the fitnesses
-    
+
 
     @ti.func
     def get_next_id(self, x, y, i):
