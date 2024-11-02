@@ -14,6 +14,9 @@ from constants import (
 from run_experiments import CONDITION_NAMES
 
 
+BORDER_COLOR = '#007155'  # UVM Green
+
+
 def compute_substr_scores():
     substr_scores = np.zeros(NUM_WEIGHTS)
     w = 0
@@ -28,40 +31,43 @@ SUBSTR_SCORES = compute_substr_scores()
 
 
 def render_env_map(env_data):
-    # Compute 'survivability' for each cell. This is a metric based on the
-    # minimum fitness required to occupy this cell and the maximum possible
-    # score achievable with the given weights.
-    # TODO: It might be better to compute what percent of randomly generated
-    # bit strings could survive here, rather than basing this on the range of
-    # possible fitness scores.
-    max_scores = (env_data['weights'] * SUBSTR_SCORES).sum(axis=2)
-    min_scores = env_data['min_fitness']
-    survivability = (max_scores - min_scores) / (MAX_HIFF - MIN_HIFF)
+    plt.figure(figsize=(6,8))
+    ax = plt.subplot(2, 1, 1)
+    ax.set(title='Min Fitness')
+    plt.imshow(env_data['min_fitness'].transpose())
+    plt.clim(0.0, MAX_HIFF)
+    plt.colorbar()
+    plt.xticks(np.arange(-0.5, ENVIRONMENT_SHAPE[0]), labels=[])
+    plt.yticks(np.arange(-0.5, ENVIRONMENT_SHAPE[1]), labels=[])
+    plt.grid(color=BORDER_COLOR)
 
-    # Set up a figure and render "survivability" at the top.
-    plt.figure(figsize=(4, 12))
-    ax = plt.subplot(BITSTR_POWER + 1, 1, 1)
-    ax.set(title='Survivability')
-    plt.imshow(survivability.transpose())
+    tile_size = (BITSTR_LEN // 2)
+    scaled_shape = tile_size * np.array(ENVIRONMENT_SHAPE)
+    env_map = np.zeros(scaled_shape)
+    bar_width = tile_size // BITSTR_POWER
+    for (x, y) in np.ndindex(ENVIRONMENT_SHAPE):
+        w = 0
+        map_tile = env_map[x * tile_size:(x + 1) * tile_size,
+                           y * tile_size:(y + 1) * tile_size]
+        weights = env_data['weights'][x, y]
+        for p in range(BITSTR_POWER):
+            substr_len = 2 ** (p + 1)
+            substr_count = BITSTR_LEN // substr_len
+            substr_weights = weights[w:w + substr_count]
+            map_tile[p * bar_width:] = substr_weights.repeat(
+                tile_size // substr_count)
+            w += substr_count
+        env_map[x * tile_size:(x + 1) * tile_size,
+                y * tile_size:(y + 1) * tile_size] = map_tile
+
+    ax = plt.subplot(2, 1, 2)
+    ax.set(title='Substring Weights')
+    plt.imshow(env_map.transpose())
     plt.clim(0.0, 1.0)
     plt.colorbar()
-
-    # For all the different substring lengths, render the average weight given
-    # to substrings of that size in their own plots.
-    # TODO: How might we show the different weights across substrings of the
-    # same size? This is a harder visualization challenge.
-    w = 0
-    for p in range(BITSTR_POWER):
-        substr_len = 2 ** (p + 1)
-        substr_count = BITSTR_LEN // substr_len
-        substr_weights = env_data['weights'][:, :, w:w + substr_count]
-        avg_weights = substr_weights.mean(axis=2)
-        ax = plt.subplot(BITSTR_POWER + 1, 1, 2 + p)
-        ax.set(title=f'Average weight for {substr_len}-bit substrings')
-        plt.imshow(avg_weights.transpose())
-        plt.clim(0.0, 1.0)
-        plt.colorbar()
-        w += substr_count
+    plt.xticks(np.arange(-0.5, scaled_shape[0], tile_size), labels=[])
+    plt.yticks(np.arange(-0.5, scaled_shape[1], tile_size), labels=[])
+    plt.grid(color=BORDER_COLOR)
 
 
 def save_env_map(path, name, env_data):
