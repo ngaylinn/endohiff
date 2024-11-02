@@ -53,7 +53,7 @@ def chart_all_results():
     # TODO: add diversity chart
     sns.set_theme()
 
-    num_artifacts = 4 * len(CONDITION_NAMES)
+    num_artifacts = 5 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     for name in CONDITION_NAMES:
         path = OUTPUT_PATH / name
@@ -73,9 +73,9 @@ def chart_all_results():
 
         try:
             chart_diversity(path, name, expt_data)
-            progress.update()
         except:
             print("diversity didn't save")
+        progress.update()
 
 
 if __name__ == '__main__':

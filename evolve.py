@@ -19,7 +19,6 @@ index = pl.DataFrame({
 
 
 def evolve(inner_population, environment):
-    # Random search (TODO: make this evolutionary!)
     inner_population.randomize()
     for inner_generation in range(INNER_GENERATIONS):
         inner_population.evaluate(environment, inner_generation)
