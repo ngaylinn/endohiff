@@ -14,7 +14,6 @@ def chart_fitness(path, name, expt_data):
     plt.ylim(MIN_HIFF, MAX_HIFF)
     fig.set(title=f'Max fitness score ({name})')
     fig.savefig(path / 'fitness.png', dpi=600)
-    plt.close()
 
 
 def chart_hiff_max(path, name, expt_data):
@@ -23,7 +22,6 @@ def chart_hiff_max(path, name, expt_data):
     plt.ylim(MIN_HIFF, MAX_HIFF)
     fig.set(title=f'Max HIFF score ({name})')
     fig.savefig(path / 'hiff_max.png', dpi=600)
-    plt.close()
 
 
 def chart_hiff_sum(path, name, expt_data):
@@ -33,7 +31,6 @@ def chart_hiff_sum(path, name, expt_data):
     plt.ylim(0, MAX_HIFF * MAX_POPULATION_SIZE)
     fig.set(title=f'Population HIFF Sum ({name}, total={overall_sum})')
     fig.savefig(path / 'hiff_sum.png', dpi=600)
-    plt.close()
 
 
 def chart_population_size(path, name, expt_data):
@@ -42,7 +39,6 @@ def chart_population_size(path, name, expt_data):
     plt.ylim(0, MAX_POPULATION_SIZE)
     fig.set(title=f'Population Size ({name})')
     fig.savefig(path / 'pop_size.png', dpi=600)
-    plt.close()
 
 def chart_diversity(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('diversity').max())  # Adjusted to max diversity per generation if needed
@@ -50,15 +46,14 @@ def chart_diversity(path, name, expt_data):
     plt.ylim(0, 1)  # Set limits according to expected diversity range (adjust as needed)
     fig.set(title=f'Population Diversity ({name})')
     fig.savefig(path / 'diversity.png', dpi=600)
-    plt.close()
 
 
 def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
-    # TODO: add diversity chart
+    # TODO: fix diversity chart
     sns.set_theme()
 
-    num_artifacts = 5 * len(CONDITION_NAMES)
+    num_artifacts = 4 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     for name in CONDITION_NAMES:
         path = OUTPUT_PATH / name
@@ -78,9 +73,9 @@ def chart_all_results():
 
         try:
             chart_diversity(path, name, expt_data)
+            progress.update()
         except:
             print("diversity didn't save")
-        progress.update()
 
 
 if __name__ == '__main__':

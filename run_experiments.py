@@ -52,9 +52,6 @@ def run_experiments():
         # always static, but eventually it will be evolved.
         np.savez(path / 'env.npz', **environment.to_numpy())
 
-        # # Log diversity history as a DataFrame
-        # diversity_df = pl.DataFrame(inner_population.diversity_history, columns=['generation', 'diversity', 'average_fitness'])
-        # diversity_df.write_parquet(path / 'diversity_inner_log.parquet')
         
         # Summarize results on the command line.
         print_summary(name, inner_log)

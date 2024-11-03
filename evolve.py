@@ -20,11 +20,17 @@ index = pl.DataFrame({
 
 def evolve(inner_population, environment):
     inner_population.randomize()
+    diversity_list = []
     for inner_generation in range(INNER_GENERATIONS):
         inner_population.evaluate(environment, inner_generation)
 
+        diversity_list.append(inner_population.pop_diversity.to_numpy())
+
+        print(f"diversity at {inner_generation} = {inner_population.pop_diversity[inner_generation]}")
+
         if inner_generation + 1 < INNER_GENERATIONS:
             inner_population.propagate(environment, inner_generation)
+
 
     # Collect the full evolutionary history in a data frame and return it.
     return pl.DataFrame({
