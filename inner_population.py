@@ -202,3 +202,6 @@ class InnerPopulation:
 
     def to_numpy(self):
         return self.pop.to_numpy()
+    
+    def debug_diversity(self, inner_pop, g):
+        print('g =', g, 'pop_diversity =', inner_pop.pop_diversity[g])   
