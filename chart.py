@@ -14,6 +14,7 @@ def chart_fitness(path, name, expt_data):
     plt.ylim(MIN_HIFF, MAX_HIFF)
     fig.set(title=f'Max fitness score ({name})')
     fig.savefig(path / 'fitness.png', dpi=600)
+    plt.close()
 
 
 def chart_hiff_max(path, name, expt_data):
@@ -22,6 +23,7 @@ def chart_hiff_max(path, name, expt_data):
     plt.ylim(MIN_HIFF, MAX_HIFF)
     fig.set(title=f'Max HIFF score ({name})')
     fig.savefig(path / 'hiff_max.png', dpi=600)
+    plt.close()
 
 
 def chart_hiff_sum(path, name, expt_data):
@@ -31,16 +33,20 @@ def chart_hiff_sum(path, name, expt_data):
     plt.ylim(0, MAX_HIFF * MAX_POPULATION_SIZE)
     fig.set(title=f'Population HIFF Sum ({name}, total={overall_sum})')
     fig.savefig(path / 'hiff_sum.png', dpi=600)
+    plt.close()
 
 
 def chart_hiff_density(path, name, expt_data):
-    # For all cells across all generations...
-    expt_data = expt_data.group_by(
+    expt_data = expt_data.filter(
+        # Looking only at living individuals...
+        pl.col('id') > 0
+    ).group_by(
+        # For all cells across all generations...
         'generation', 'x', 'y'
     ).agg(
         # Sum all the hiff scores in this cell and divide by the number of
         # living individuals in this cell.
-        (pl.col('hiff').sum() / (pl.col('id') > 0).len()).alias('mean_hiff')
+        pl.col('hiff').mean().alias('mean_hiff')
     )
     # Plot average hiff score for every cell across generations, using a
     # scatter plot so we can see the distribution of cells with high or low
@@ -59,6 +65,7 @@ def chart_population_size(path, name, expt_data):
     plt.ylim(0, MAX_POPULATION_SIZE)
     fig.set(title=f'Population Size ({name})')
     fig.savefig(path / 'pop_size.png', dpi=600)
+    plt.close()
 
 
 def chart_survival(path, name, expt_data):
@@ -131,6 +138,7 @@ def chart_diversity(path, name, expt_data):
     plt.ylim(0, 1)  # Set limits according to expected diversity range (adjust as needed)
     fig.set(title=f'Population Diversity ({name})')
     fig.savefig(path / 'diversity.png', dpi=600)
+    plt.close()
 
 
 def chart_all_results():
