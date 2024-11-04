@@ -144,22 +144,22 @@ def chart_all_results():
         path = OUTPUT_PATH / name
         expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
-        #chart_fitness(path, name, expt_data)
+        chart_fitness(path, name, expt_data)
         progress.update()
 
-        #chart_hiff_max(path, name, expt_data)
+        chart_hiff_max(path, name, expt_data)
         progress.update()
 
-        #chart_hiff_sum(path, name, expt_data)
+        chart_hiff_sum(path, name, expt_data)
         progress.update()
 
         chart_hiff_density(path, name, expt_data)
         progress.update()
 
-        #chart_population_size(path, name, expt_data)
+        chart_population_size(path, name, expt_data)
         progress.update()
 
-        #chart_survival(path, name, expt_data)
+        chart_survival(path, name, expt_data)
         progress.update()
 
         try:
