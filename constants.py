@@ -24,6 +24,6 @@ TOURNAMENT_SIZE = 2
 CROSSOVER_RATE = 0.5 #for diverse_crossover, frequency of crossover
 
 # The chance that an cell vacated due to death will be filled per generation.
-REFILL_RATE = 0.5
+REFILL_RATE = 1.0
 
 OUTPUT_PATH = Path('output')
