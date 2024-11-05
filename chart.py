@@ -7,6 +7,7 @@ from tqdm import trange
 
 from constants import INNER_GENERATIONS, MAX_HIFF, MAX_POPULATION_SIZE, MIN_HIFF, OUTPUT_PATH
 from run_experiments import CONDITION_NAMES
+from evolve import get_whole_pop_metrics
 
 def chart_fitness(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('fitness').max())
@@ -131,7 +132,7 @@ def chart_survival(path, name, expt_data):
     fig.savefig(path / 'survival.png', dpi=600)
     plt.close()
 
-
+# TODO: OUTDATED - DELETE WHEN DONE
 def chart_diversity(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('diversity').max())  # Adjusted to max diversity per generation if needed
     fig = sns.relplot(data=expt_data, x='generation', y='diversity', kind='line')
@@ -140,6 +141,12 @@ def chart_diversity(path, name, expt_data):
     fig.savefig(path / 'diversity.png', dpi=600)
     plt.close()
 
+def chart_fitness_diversity(path, name, df):
+    fig = sns.relplot(data=df, x='generation', y='fitness_diversity', kind='line')
+    # plt.ylim(0, 1)  # Adjust limits according to expected diversity range
+    fig.set(title=f'Fitness Diversity ({name})')
+    fig.savefig(path / 'fitness_diversity.png', dpi=600)
+    plt.close()
 
 def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
@@ -170,11 +177,13 @@ def chart_all_results():
         chart_survival(path, name, expt_data)
         progress.update()
 
+        whole_pop_metrics = get_whole_pop_metrics()
+
         try:
-            chart_diversity(path, name, expt_data)
+            chart_fitness_diversity(path, name, whole_pop_metrics)
             progress.update()
-        except:
-            print("diversity didn't save")
+        except Exception as e:
+            print(f"diversity didn't save: {e}")
 
 
 if __name__ == '__main__':

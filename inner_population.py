@@ -44,6 +44,9 @@ class InnerPopulation:
         self.pop_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.pop_sum_fitness = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))  # Sum of all the fitnesses
 
+        self.fitness_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
+        self.genetic_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
+
 
     @ti.func
     def get_next_id(self, x, y, i):
@@ -82,14 +85,13 @@ class InnerPopulation:
             self.pop[g, x, y, i].fitness = fitness
             self.pop[g, x, y, i].hiff = hiff
 
+        # calc fitness diversity
+        self.fitness_diversity[g], self.pop_sum_fitness[g] = self.evaluate_fitness_diversity(fitness_sum, fitness_squared_sum, count)
+
+        # TODO: calc genetic diversity
+        # TODO: calc other whole-pop by-generation stuff?? 
         # Calculate diversity and total fitness
-        if count > 0:
-            average_fitness = fitness_sum / count
-            variance = (fitness_squared_sum / count) - (average_fitness ** 2)
-            self.pop_diversity[g] = ti.sqrt(variance)  # Standard deviation
-        else:
-            self.pop_diversity[g] = 0.0  # No individuals
-        self.pop_sum_fitness[g] = fitness_sum  # Assigning to the field
+        
 
     @ti.kernel
     def migrate(self, g: int):
@@ -203,5 +205,21 @@ class InnerPopulation:
     def to_numpy(self):
         return self.pop.to_numpy()
     
-    def debug_diversity(self, inner_pop, g):
-        print('g =', g, 'pop_diversity =', inner_pop.pop_diversity[g])   
+
+    def evaluate_fitness_diversity(self, fitness_sum, fitness_squared_sum, count):
+        '''calculates fitness diversity for 1 generation'''
+        fitness_diversity = 0
+        pop_sum_fitness = 0
+        if count > 0:
+            average_fitness = fitness_sum / count
+            variance = (fitness_squared_sum / count) - (average_fitness ** 2)
+            fitness_diversity = ti.sqrt(variance)  # Standard deviation
+        else:
+            fitness_diversity = 0.0  # No individuals
+        pop_sum_fitness = fitness_sum  # Assigning to the field
+
+        return fitness_diversity, pop_sum_fitness
+
+    def evaluate_genetic_diversity(self, inner_pop, g):
+        '''stay tuned...'''
+        pass
