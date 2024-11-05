@@ -43,10 +43,13 @@ def run_experiments():
         # Run the condition and cache the results.
         inner_population = InnerPopulation()
         environment = make_environment()
-        inner_log = evolve(inner_population, environment)
+        inner_log, whole_pop_metrics = evolve(inner_population, environment)
 
         # Save the experiment logs to disk.
         inner_log.write_parquet(path / 'inner_log.parquet')
+
+        # Save the whole_pop_metrics DataFrame if you want to keep it
+        whole_pop_metrics.write_parquet(path / 'whole_pop_metrics.parquet')
 
         # Save the final environment for this experiment. Currently this is
         # always static, but eventually it will be evolved.

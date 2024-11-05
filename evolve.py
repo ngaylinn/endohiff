@@ -37,24 +37,38 @@ def evolve(inner_population, environment):
 
         fitness_diversity_list.append(current_gen_fitness_diversity)
         
-        # Update the whole-population metrics DataFrame in place
+        # # Update the whole-population metrics DataFrame in place
+        # whole_pop_metrics_df = whole_pop_metrics_df.with_columns(
+        #     pl.lit(current_gen_fitness_diversity).alias('fitness_diversity')
+        # ).with_columns(
+        #     pl.lit(inner_generation).alias('generation')
+        # )  
+
+        # Update the fitness value for this generation
+        # Update the fitness value for this generation using set
         whole_pop_metrics_df = whole_pop_metrics_df.with_columns(
-            pl.lit(current_gen_fitness_diversity).alias('fitness_diversity')
-        ).with_columns(
-            pl.lit(inner_generation).alias('generation')
-        )  
+            pl.when(pl.col('generation') == inner_generation)
+            .then(current_gen_fitness_diversity)
+            .otherwise(pl.col('fitness_diversity'))
+            .alias('fitness_diversity')
+        )
 
         if inner_generation + 1 < INNER_GENERATIONS:
             inner_population.propagate(environment, inner_generation)
 
+    print("checking whole_pop_metrics_df inside evolve.evolve")
+    print(whole_pop_metrics_df)
 
     # Collect the full evolutionary history in a data frame and return it.
-    return pl.DataFrame({
+    inner_log =  pl.DataFrame({
         field_name: data.flatten()
         for field_name, data in inner_population.to_numpy().items()
     }).hstack(
         index
     )
+    return inner_log, whole_pop_metrics_df
 
-def get_whole_pop_metrics():
-    return whole_pop_metrics_df
+# def get_whole_pop_metrics():
+#     print("testing get_whole_pop_metrics inside evolve.py")
+#     print(f"whole_pop_metrics_df: {whole_pop_metrics_df}")
+#     return whole_pop_metrics_df

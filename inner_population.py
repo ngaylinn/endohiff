@@ -220,20 +220,6 @@ class InnerPopulation:
     def evaluate_genetic_diversity(self, inner_pop, g):
         '''stay tuned...'''
         pass
-    
 
-    # def evaluate_fitness_diversity(self, fitness_sum, fitness_squared_sum, count):
-    #     # calculates fitness diversity for 1 generation
-    #     fitness_diversity = 0
-    #     pop_sum_fitness = 0
-    #     if count > 0:
-    #         average_fitness = fitness_sum / count
-    #         variance = (fitness_squared_sum / count) - (average_fitness ** 2)
-    #         fitness_diversity = ti.sqrt(variance)  # Standard deviation
-    #     else:
-    #         fitness_diversity = 0.0  # No individuals
-    #     pop_sum_fitness = fitness_sum  # Assigning to the field
-
-    #     return fitness_diversity, pop_sum_fitness
 
 

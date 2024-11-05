@@ -7,7 +7,6 @@ from tqdm import trange
 
 from constants import INNER_GENERATIONS, MAX_HIFF, MAX_POPULATION_SIZE, MIN_HIFF, OUTPUT_PATH
 from run_experiments import CONDITION_NAMES
-from evolve import get_whole_pop_metrics
 
 def chart_fitness(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('fitness').max())
@@ -142,6 +141,8 @@ def chart_diversity(path, name, expt_data):
     plt.close()
 
 def chart_fitness_diversity(path, name, df):
+    print("testing the df")
+    print(f"whole_pop_metrics: {df}")
     fig = sns.relplot(data=df, x='generation', y='fitness_diversity', kind='line')
     # plt.ylim(0, 1)  # Adjust limits according to expected diversity range
     fig.set(title=f'Fitness Diversity ({name})')
@@ -150,7 +151,6 @@ def chart_fitness_diversity(path, name, df):
 
 def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
-    # TODO: fix diversity chart
     sns.set_theme()
 
     num_artifacts = 7 * len(CONDITION_NAMES)
@@ -158,6 +158,8 @@ def chart_all_results():
     for name in CONDITION_NAMES:
         path = OUTPUT_PATH / name
         expt_data = pl.read_parquet(path / 'inner_log.parquet')
+
+        whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
         chart_fitness(path, name, expt_data)
         progress.update()
@@ -176,8 +178,6 @@ def chart_all_results():
 
         chart_survival(path, name, expt_data)
         progress.update()
-
-        whole_pop_metrics = get_whole_pop_metrics()
 
         try:
             chart_fitness_diversity(path, name, whole_pop_metrics)
