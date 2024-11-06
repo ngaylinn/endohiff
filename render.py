@@ -93,6 +93,21 @@ def render_pop_map(pop_map):
     plt.clim(1, MAX_HIFF)
     return image
 
+def render_concentration_map(path, name, avg_scores):
+    """
+    Renders the concentration map (average HIFF scores per cell) as a heatmap.
+    Args:
+        concentration_map: 2D numpy array with shape (32, 64), where each value represents the average HIFF score of a cell.
+    """
+    plt.figure(figsize=(8, 4.5))
+    plt.imshow(avg_scores.T, cmap='viridis', interpolation='nearest')
+    plt.colorbar()
+    plt.suptitle(f'HIFF density map ({name})')
+    plt.xlabel('Grid Column')
+    plt.ylabel('Grid Row')
+    plt.savefig(path / 'avg_hiff_map.png', dpi=600)
+    plt.close()
+
 
 def save_fitness_map(path, name, expt_data):
     pop_data = expt_data.select('fitness').to_numpy().flatten()
@@ -133,6 +148,38 @@ def save_hiff_animation(path, expt_data):
     anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
     anim.save(path / 'hiff_map.mp4', writer='ffmpeg')
 
+# def save_avg_hiff_map(path, name, expt_data):
+#     # Extract the HIFF scores for each individual in the population.
+#     hiff_scores = expt_data.select('hiff').to_numpy()
+    
+#     # Reshape the hiff_scores to match the grid structure (32 x 64 cells, each with 25 individuals).
+#     hiff_scores_reshaped = hiff_scores.reshape(ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY)
+
+#     # Compute the average HIFF score for each cell (averaging across the 25 individuals in each cell).
+#     avg_hiff_scores = np.mean(hiff_scores_reshaped, axis=2)
+    
+#     # Render the map of average HIFF scores.
+#     plt.figure(figsize=(8, 4.5))
+#     render_pop_map(make_pop_map(avg_hiff_scores.flatten()))  # Flatten to match the render_pop_map input
+#     plt.suptitle(f'Average HIFF score map ({name})')
+#     plt.colorbar()
+#     plt.savefig(path / 'avg_hiff_map.png', dpi=600)
+#     plt.close()
+
+def save_avg_hiff_map(path, name, expt_data):
+    # Extract the HIFF scores for each individual in the population.
+    hiff_scores = expt_data.select('hiff').to_numpy()
+    
+    # Reshape the HIFF scores to (32, 64, 25) shape, where each cell has 25 individuals
+    # TODO: change to (64, 32, 25)
+    hiff_scores_reshaped = hiff_scores.reshape(ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY)
+
+    # Get the aggregated average HIFF scores for each cell
+    avg_hiff_scores = np.mean(hiff_scores_reshaped, axis = 2)
+
+    # Render the concentration map of average HIFF scores
+    render_concentration_map(path, name, avg_hiff_scores)
+
 
 def save_all_results():
     num_artifacts = 4 * len(CONDITION_NAMES)
@@ -155,6 +202,9 @@ def save_all_results():
         progress.update()
 
         save_hiff_map(path, name, expt_data)
+        progress.update()
+
+        save_avg_hiff_map(path, name, expt_data)
         progress.update()
 
         # Load and render the environment where this experiment happened.
