@@ -31,7 +31,7 @@ DEAD_ID = 0
 
 @ti.data_oriented
 class InnerPopulation:
-    def __init__(self):
+    def __init__(self, migration_strategy: str): # TODO: ANNA REMOVE  "", migration_strategy: str" WHEN DONE
         self.refill_rate = REFILL_RATE
         self.random_refill = True
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
@@ -46,6 +46,9 @@ class InnerPopulation:
 
         self.fitness_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.genetic_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
+
+        # TODO: ANNA REMOVE WHEN DONE
+        self.migration_strategy = migration_strategy
 
 
     @ti.func
@@ -150,6 +153,122 @@ class InnerPopulation:
                 self.pop[g, new_x, new_y, new_i] = individual
                 self.pop[g, x, y, i] = DEAD
 
+
+    def migrate_experiment(self, gen):
+        if self.migration_strategy == 'migrate_acorn_drop':
+            # Call the migrate_acorn_drop function
+            self.migrate_acorn_drop(gen)       
+        elif self.migration_strategy == 'migrate_walk':
+            self.migrate_walk(gen)
+        elif self.migration_strategy == "migrate_overwriting":
+            self.migrate_overwriting(gen)
+        else:
+            self.migrate_selective(gen)
+
+    @ti.kernel
+    def migrate_acorn_drop(self, g: int):
+        # baseline migration strategy - same as migrate() above 
+        for x, y, i in ti.ndrange(*self.shape):
+            scale_factor = 0.5
+            dx = ti.round(scale_factor * ti.randn())
+            dy = ti.round(scale_factor * ti.randn())
+            
+            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
+            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+
+            if new_x != x and new_y != y:
+                individual = self.pop[g, x, y, i]
+                self.pop[g, new_x, new_y, new_i] = individual
+                self.pop[g, x, y, i] = DEAD
+
+    @ti.kernel
+    def migrate_walk(self, g: int):
+        # This strategy involves walking individuals to an adjacent cell (left, right, up, or down) with a 10% chance of migration.
+        for x, y, i in ti.ndrange(*self.shape):
+            # new x, y, i init
+            new_x = x
+            new_y = y
+            new_i = i
+            if ti.random() < 0.1:  # 10% chance to migrate
+                direction = ti.random(ti.i32) % 4  # Choose a random direction
+                
+                # Determine new_x and new_y based on direction
+                if direction == 0:  # Move left
+                    new_x = max(x - 1, 0)
+                    new_y = y
+                elif direction == 1:  # Move right
+                    new_x = min(x + 1, ENVIRONMENT_SHAPE[0] - 1)
+                    new_y = y
+                elif direction == 2:  # Move up
+                    new_x = x
+                    new_y = max(y - 1, 0)
+                else:  # Move down
+                    new_x = x
+                    new_y = min(y + 1, ENVIRONMENT_SHAPE[1] - 1)
+                
+                # Choose a random individual index to migrate to the new position
+                new_i = ti.random(ti.i32) % CARRYING_CAPACITY
+
+                if new_x != x and new_y != y:
+                    individual = self.pop[g, x, y, i]
+                    self.pop[g, new_x, new_y, new_i] = individual
+                    self.pop[g, x, y, i] = DEAD
+
+
+    @ti.kernel
+    def migrate_overwriting(self, g: int):
+    # Migrants replace local individuals only if they have a higher fitness than the current inhabitant. 
+    # This ensures that more fit individuals are prioritized for migration.
+        for x, y, i in ti.ndrange(*self.shape):
+            scale_factor = 0.5 #same gaussian dist as baseline acorn drop -- but now checks the prev. inhabitant's fitness
+            dx = ti.round(scale_factor * ti.randn())
+            dy = ti.round(scale_factor * ti.randn())
+            
+            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
+            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+
+            if new_x != x and new_y != y:
+                individual = self.pop[g, x, y, i]
+                current_resident = self.pop[g, new_x, new_y, new_i]
+
+                # Replace resident only if the migrant has higher fitness
+                if individual.fitness > current_resident.fitness:
+                    self.pop[g, new_x, new_y, new_i] = individual
+                    self.pop[g, x, y, i] = DEAD
+
+    @ti.kernel
+    def migrate_selective(self, g: int):
+        for x, y, i in ti.ndrange(*self.shape):
+            # Magic number: 10% chance of migration
+            scale_factor = 0.5
+
+            # "Acorn drop": use a normal distribution to find a new home for this individual
+            dx = ti.round(scale_factor * ti.randn())
+            dy = ti.round(scale_factor * ti.randn())
+
+            # Ensure the new location is within bounds
+            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
+            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+
+            if new_x != x or new_y != y:
+                individual = self.pop[g, x, y, i]
+
+                # Perform tournament selection to choose a migrant from the current location
+                migrant = tournament_selection(self.pop, g, new_x, new_y)
+
+                # Migrate or replace: replace an individual only if the migrant is fitter
+                if migrant.fitness > individual.fitness:
+                    # Overwrite the local individual with the migrant
+                    self.pop[g, new_x, new_y, new_i] = migrant
+                    self.pop[g, x, y, i] = DEAD
+                else:
+                    # If the migrant is less fit, do not overwrite
+                    self.pop[g, new_x, new_y, new_i] = individual
+                    self.pop[g, x, y, i] = DEAD
+
     @ti.kernel
     def refill_empty_spaces(self, g: int):
         for x, y, i in ti.ndrange(*self.shape):
@@ -209,7 +328,8 @@ class InnerPopulation:
 
     def propagate(self, environment, generation):
         # TODO: Experiment with different orders...
-        self.migrate(generation)
+        
+        self.migrate_experiment(generation)
         self.refill_empty_spaces(generation)
         self.populate_children(environment, generation)
 

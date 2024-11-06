@@ -13,7 +13,6 @@ from constants import (
     INNER_GENERATIONS, NUM_WEIGHTS, MAX_HIFF, MIN_HIFF, OUTPUT_PATH)
 from run_experiments import CONDITION_NAMES
 
-
 BORDER_COLOR = '#007155'  # UVM Green
 
 

@@ -8,6 +8,10 @@ from tqdm import trange
 from constants import INNER_GENERATIONS, MAX_HIFF, MAX_POPULATION_SIZE, MIN_HIFF, OUTPUT_PATH
 from run_experiments import CONDITION_NAMES
 
+# TODO: ANNA REMOVE WHEN DONE
+MIGRATION_STRATEGIES = ['migrate_acorn_drop', 'migrate_walk',  
+                        'migrate_overwriting', 'migrate_selective'] 
+
 def chart_fitness(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('fitness').max())
     fig = sns.relplot(data=expt_data, x='generation', y='fitness', kind='line')
@@ -139,6 +143,7 @@ def chart_fitness_diversity(path, name, df):
     fig.savefig(path / 'fitness_diversity.png', dpi=600)
     plt.close()
 
+
 def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
     sns.set_theme()
@@ -146,34 +151,38 @@ def chart_all_results():
     num_artifacts = 7 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     for name in CONDITION_NAMES:
-        path = OUTPUT_PATH / name
-        expt_data = pl.read_parquet(path / 'inner_log.parquet')
+        for strategy in MIGRATION_STRATEGIES:
+            # TODO: ANNA CHANGE BACK WHEN DONE
+            # path = OUTPUT_PATH / name
+            migration_base_path = OUTPUT_PATH / 'NO_CROSSOVER_migration_strategy_tests'
+            path = migration_base_path / f'{strategy}' / name
+            expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
-        whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
+            whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
-        chart_fitness(path, name, expt_data)
-        progress.update()
-
-        chart_hiff_max(path, name, expt_data)
-        progress.update()
-
-        chart_hiff_sum(path, name, expt_data)
-        progress.update()
-
-        chart_hiff_density(path, name, expt_data)
-        progress.update()
-
-        chart_population_size(path, name, expt_data)
-        progress.update()
-
-        chart_survival(path, name, expt_data)
-        progress.update()
-
-        try:
-            chart_fitness_diversity(path, name, whole_pop_metrics)
+            chart_fitness(path, name, expt_data)
             progress.update()
-        except Exception as e:
-            print(f"diversity didn't save: {e}")
+
+            chart_hiff_max(path, name, expt_data)
+            progress.update()
+
+            chart_hiff_sum(path, name, expt_data)
+            progress.update()
+
+            chart_hiff_density(path, name, expt_data)
+            progress.update()
+
+            chart_population_size(path, name, expt_data)
+            progress.update()
+
+            chart_survival(path, name, expt_data)
+            progress.update()
+
+            try:
+                chart_fitness_diversity(path, name, whole_pop_metrics)
+                progress.update()
+            except Exception as e:
+                print(f"diversity didn't save: {e}")
 
 
 if __name__ == '__main__':
