@@ -148,23 +148,6 @@ def save_hiff_animation(path, expt_data):
     anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
     anim.save(path / 'hiff_map.mp4', writer='ffmpeg')
 
-# def save_avg_hiff_map(path, name, expt_data):
-#     # Extract the HIFF scores for each individual in the population.
-#     hiff_scores = expt_data.select('hiff').to_numpy()
-    
-#     # Reshape the hiff_scores to match the grid structure (32 x 64 cells, each with 25 individuals).
-#     hiff_scores_reshaped = hiff_scores.reshape(ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY)
-
-#     # Compute the average HIFF score for each cell (averaging across the 25 individuals in each cell).
-#     avg_hiff_scores = np.mean(hiff_scores_reshaped, axis=2)
-    
-#     # Render the map of average HIFF scores.
-#     plt.figure(figsize=(8, 4.5))
-#     render_pop_map(make_pop_map(avg_hiff_scores.flatten()))  # Flatten to match the render_pop_map input
-#     plt.suptitle(f'Average HIFF score map ({name})')
-#     plt.colorbar()
-#     plt.savefig(path / 'avg_hiff_map.png', dpi=600)
-#     plt.close()
 
 def save_avg_hiff_map(path, name, expt_data):
     # Extract the HIFF scores for each individual in the population.
@@ -188,6 +171,8 @@ def save_all_results():
         path = OUTPUT_PATH / name
         expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
+        whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
+
         # Save an animation of fitness over time.
         save_hiff_animation(path, expt_data)
         progress.update()
@@ -209,6 +194,7 @@ def save_all_results():
 
         # Load and render the environment where this experiment happened.
         env_data = np.load(path / 'env.npz')
+
         save_env_map(path, name, env_data)
         progress.update()
 
