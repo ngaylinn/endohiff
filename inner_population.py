@@ -4,7 +4,7 @@ import numpy as np
 
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
-    MAX_POPULATION_SIZE, REFILL_RATE)
+    MAX_POPULATION_SIZE, REFILL_RATE, BITSTR_LEN)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, diverse_crossover, tournament_selection
 
@@ -23,7 +23,6 @@ class Individual:
     # The raw HIFF score of this individual.
     hiff: ti.uint32
 
-
 # Unoccupied spaces are marked with a DEAD individual (all fields set to 0)
 DEAD = Individual()
 DEAD_ID = 0
@@ -31,7 +30,7 @@ DEAD_ID = 0
 
 @ti.data_oriented
 class InnerPopulation:
-    def __init__(self, migration_strategy: str): # TODO: ANNA REMOVE  "", migration_strategy: str" WHEN DONE
+    def __init__(self): 
         self.refill_rate = REFILL_RATE
         self.random_refill = True
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
@@ -43,12 +42,11 @@ class InnerPopulation:
         # holding diversity over generations
         self.pop_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.pop_sum_fitness = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))  # Sum of all the fitnesses
+        self.pop_sum_genetic = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))  # Sum of all the fitnesses
 
         self.fitness_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.genetic_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
 
-        # TODO: ANNA REMOVE WHEN DONE
-        self.migration_strategy = migration_strategy
 
 
     @ti.func
@@ -68,6 +66,19 @@ class InnerPopulation:
         self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
 
     @ti.func
+    def hamming_distance(self, individual1: ti.template(), individual2: ti.template()) -> ti.i32:
+        # Evaluates the Hamming distance between 2 different bitstrings
+        distance = 0
+        # Iterate over all bits in the bitstring (64 bits)
+        for bit in range(BITSTR_LEN):
+            # Use bitwise shift and bitwise AND to check each individual bit
+            bit1 = (individual1.bitstr >> bit) & 1
+            bit2 = (individual2.bitstr >> bit) & 1
+            if bit1 != bit2:
+                distance += 1
+        return distance
+
+    @ti.func
     def evaluate_fitness_diversity(self, fitness_sum: ti.f32, fitness_squared_sum: ti.f32, count: ti.i32) -> ti.types.vector(2, ti.f32):
         fitness_diversity = 0.0
         pop_sum_fitness = fitness_sum
@@ -76,6 +87,33 @@ class InnerPopulation:
             variance = (fitness_squared_sum / count) - (average_fitness ** 2)
             fitness_diversity = ti.sqrt(variance)
         return ti.Vector([fitness_diversity, pop_sum_fitness])
+
+    @ti.func
+    def evaluate_genetic_diversity(self, generation: ti.i32) -> ti.types.vector(2, ti.f32):
+        # init everything to zero
+        genetic_sum = 0.0
+        genetic_squared_sum = 0.0
+        count = 0
+        
+        # looping through pop and comparing every bitstring to every other bitstring 
+        # obviously very computationally laborious... if there's a better way adjust by all means
+        for x, y, i in ti.ndrange(self.shape[0], self.shape[1], self.shape[2]):
+            for x2, y2, i2 in ti.ndrange(self.shape[0], self.shape[1], self.shape[2]):
+                if (x != x2 or y != y2 or i != i2) and self.pop[generation, x, y, i] != DEAD and self.pop[generation, x2, y2, i2] != DEAD:
+                    hamming_dist = self.hamming_distance(self.pop[generation, x, y, i], self.pop[generation, x2, y2, i2])
+                    genetic_sum += hamming_dist
+                    genetic_squared_sum += hamming_dist ** 2
+                    count += 1
+
+        genetic_diversity = 0.0
+        pop_sum_genetic = genetic_sum
+        if count > 0:
+            average_genetic = genetic_sum / count
+            variance = (genetic_squared_sum / count) - (average_genetic ** 2)
+            genetic_diversity = ti.sqrt(variance) #sqrt of the variance
+            
+        return ti.Vector([genetic_diversity, pop_sum_genetic])    
+
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: int):
@@ -99,13 +137,16 @@ class InnerPopulation:
             self.pop[g, x, y, i].hiff = hiff
 
         # calc fitness diversity
-        result = self.evaluate_fitness_diversity(fitness_sum, fitness_squared_sum, count)
-        self.fitness_diversity[g] = result[0]
-        self.pop_sum_fitness[g] = result[1]
+        fitness_diversity_result = self.evaluate_fitness_diversity(fitness_sum, fitness_squared_sum, count)
+        self.fitness_diversity[g] = fitness_diversity_result[0]
+        self.pop_sum_fitness[g] = fitness_diversity_result[1]
 
-        # TODO: calc genetic diversity
+        # calc genetic diversity
+        genetic_diversity_result = self.evaluate_genetic_diversity(g)
+        self.genetic_diversity[g] = genetic_diversity_result[0]
+        self.pop_sum_genetic[g] = genetic_diversity_result[1]
+
         # TODO: calc other whole-pop by-generation stuff?? 
-        # Calculate diversity and total fitness
         
 
     @ti.kernel
@@ -154,16 +195,16 @@ class InnerPopulation:
                 self.pop[g, x, y, i] = DEAD
 
 
-    def migrate_experiment(self, gen):
-        if self.migration_strategy == 'migrate_acorn_drop':
-            # Call the migrate_acorn_drop function
-            self.migrate_acorn_drop(gen)       
-        elif self.migration_strategy == 'migrate_walk':
-            self.migrate_walk(gen)
-        elif self.migration_strategy == "migrate_overwriting":
-            self.migrate_overwriting(gen)
-        else:
-            self.migrate_selective(gen)
+    # def migrate_experiment(self, gen):
+    #     if self.migration_strategy == 'migrate_acorn_drop':
+    #         # Call the migrate_acorn_drop function
+    #         self.migrate_acorn_drop(gen)       
+    #     elif self.migration_strategy == 'migrate_walk':
+    #         self.migrate_walk(gen)
+    #     elif self.migration_strategy == "migrate_overwriting":
+    #         self.migrate_overwriting(gen)
+    #     else:
+    #         self.migrate_selective(gen)
 
     @ti.kernel
     def migrate_acorn_drop(self, g: int):
@@ -240,6 +281,8 @@ class InnerPopulation:
 
     @ti.kernel
     def migrate_selective(self, g: int):
+    # migrant selected by tournament selection
+        # selects the fittest indivs for migration
         for x, y, i in ti.ndrange(*self.shape):
             # Magic number: 10% chance of migration
             scale_factor = 0.5
@@ -254,7 +297,8 @@ class InnerPopulation:
             new_i = ti.random(ti.int32) % CARRYING_CAPACITY
 
             if new_x != x or new_y != y:
-                individual = self.pop[g, x, y, i]
+                # competing resident location
+                individual = self.pop[g, x, y, i] 
 
                 # Perform tournament selection to choose a migrant from the current location
                 migrant = tournament_selection(self.pop, g, new_x, new_y)
@@ -327,19 +371,14 @@ class InnerPopulation:
 
 
     def propagate(self, environment, generation):
-        # TODO: Experiment with different orders...
-        
-        self.migrate_experiment(generation)
+        # TODO: Experiment with different orders...       
+        self.migrate(generation)
         self.refill_empty_spaces(generation)
         self.populate_children(environment, generation)
 
 
     def to_numpy(self):
         return self.pop.to_numpy()
-    
-    def evaluate_genetic_diversity(self, inner_pop, g):
-        '''stay tuned...'''
-        pass
 
 
 

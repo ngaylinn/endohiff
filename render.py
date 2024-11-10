@@ -153,7 +153,6 @@ def save_avg_hiff_map(path, name, expt_data):
     hiff_scores = expt_data.select('hiff').to_numpy()
     
     # Reshape the HIFF scores to (32, 64, 25) shape, where each cell has 25 individuals
-    # TODO: change to (64, 32, 25)
     hiff_scores_reshaped = hiff_scores.reshape(ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY)
 
     # Get the aggregated average HIFF scores for each cell
@@ -162,9 +161,59 @@ def save_avg_hiff_map(path, name, expt_data):
     # Render the concentration map of average HIFF scores
     render_concentration_map(path, name, avg_hiff_scores)
 
+'''
+bringing a genetic diversity calc function in directly to render for expt data
+to keep the amount of extra data craziness to a min -- this is coming directly from 
+fitness vals already in the expt data
+'''
+def calculate_genetic_diversity(pop_data):
+    """
+    Calculate genetic diversity for each cell in the environment.
+    Args:
+        pop_data: numpy array of shape (NUM_INDIVIDUALS, BITSTR_LEN)
+    Returns:
+        2D numpy array of genetic diversity values for each cell.
+    """
+    pop_data_reshaped = pop_data.reshape(ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY, BITSTR_LEN)
+    
+    genetic_diversity_map = np.zeros(ENVIRONMENT_SHAPE)
+
+    for x in range(ENVIRONMENT_SHAPE[0]):
+        for y in range(ENVIRONMENT_SHAPE[1]):
+            genetic_sum = 0.0
+            genetic_squared_sum = 0.0
+            count = 0
+            for i in range(CARRYING_CAPACITY):
+                for j in range(i + 1, CARRYING_CAPACITY):
+                    bitstring1 = pop_data_reshaped[x, y, i]
+                    bitstring2 = pop_data_reshaped[x, y, j]
+                    if np.any(bitstring1) and np.any(bitstring2):  # Ensure individuals are not dead
+                        hamming_dist = np.sum(bitstring1 != bitstring2)
+                        genetic_sum += hamming_dist
+                        genetic_squared_sum += hamming_dist ** 2
+                        count += 1
+            if count > 0:
+                average_genetic = genetic_sum / count
+                variance = (genetic_squared_sum / count) - (average_genetic ** 2)
+                genetic_diversity = np.sqrt(variance)
+                genetic_diversity_map[x, y] = genetic_diversity
+    
+    return genetic_diversity_map
+
+
+def render_genetic_diversity_map(path, name, genetic_diversity_map):
+    plt.figure(figsize=(8, 4.5))
+    plt.imshow(genetic_diversity_map.T, cmap='viridis', interpolation='nearest')
+    plt.colorbar()
+    plt.suptitle(f'Genetic Diversity Map ({name})')
+    plt.xlabel('Grid Column')
+    plt.ylabel('Grid Row')
+    plt.savefig(path / 'genetic_diversity_map.png', dpi=600)
+    plt.close()
+
 
 def save_all_results():
-    num_artifacts = 4 * len(CONDITION_NAMES)
+    num_artifacts = 4 * len(CONDITION_NAMES) # QUESTION: do we need to update this as I add in more maps?
     progress = trange(num_artifacts)
     for name in CONDITION_NAMES:
         path = OUTPUT_PATH / name
@@ -190,6 +239,12 @@ def save_all_results():
 
         save_avg_hiff_map(path, name, expt_data)
         progress.update()
+
+        # # adding for spatial genetic diversity
+        # pop_data = expt_data.select('fitness').to_numpy().flatten()
+        # genetic_diversity_map = calculate_genetic_diversity(pop_data)
+        # render_genetic_diversity_map(path, name, genetic_diversity_map)
+        # progress.update()       
 
         # Load and render the environment where this experiment happened.
         env_data = np.load(path / 'env.npz')

@@ -21,6 +21,7 @@ index = pl.DataFrame({
 whole_pop_metrics_df = pl.DataFrame({
     'generation': np.arange(INNER_GENERATIONS),
     'fitness_diversity': [0.0] * INNER_GENERATIONS,  # Initialize with zeros
+    'genetic_diversity': [0.0] * INNER_GENERATIONS
     # TODO: add new metrics later :)
 })
 
@@ -30,12 +31,15 @@ def evolve(inner_population, environment):
 
     inner_population.randomize()
     fitness_diversity_list = []
+    genetic_diversity_list = []
     for inner_generation in range(INNER_GENERATIONS):
         inner_population.evaluate(environment, inner_generation)
         # TODO: add same stuff for other whole-population metrics
         current_gen_fitness_diversity = inner_population.fitness_diversity.to_numpy()
+        current_gen_genetic_diversity = inner_population.genetic_diversity.to_numpy()
 
         fitness_diversity_list.append(current_gen_fitness_diversity)
+        genetic_diversity_list.append(current_gen_genetic_diversity)
 
         # Update the fitness value for this generation using set
         whole_pop_metrics_df = whole_pop_metrics_df.with_columns(
@@ -43,6 +47,11 @@ def evolve(inner_population, environment):
             .then(current_gen_fitness_diversity)
             .otherwise(pl.col('fitness_diversity'))
             .alias('fitness_diversity')
+        ).with_columns(
+            pl.when(pl.col('generation') == inner_generation)
+            .then(current_gen_genetic_diversity)
+            .otherwise(pl.col('genetic_diversity'))
+            .alias('genetic_diversity')
         )
 
         if inner_generation + 1 < INNER_GENERATIONS:
