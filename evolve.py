@@ -26,7 +26,7 @@ def evolve(inner_population, environment):
 
         diversity_list.append(inner_population.pop_diversity.to_numpy())
 
-        print(f"diversity at {inner_generation} = {inner_population.pop_diversity[inner_generation]}")
+        #print(f"diversity at {inner_generation} = {inner_population.pop_diversity[inner_generation]}")
 
         if inner_generation + 1 < INNER_GENERATIONS:
             inner_population.propagate(environment, inner_generation)

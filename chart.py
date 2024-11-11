@@ -39,15 +39,44 @@ def chart_hiff_sum(path, name, expt_data):
 def chart_hiff_density(path, name, expt_data):
     expt_data = expt_data.filter(
         # Looking only at living individuals...
-        pl.col('id') > 0
+        (pl.col('id') > 0) &
+        # Sample every ten generations...
+        (pl.col('generation') % 10 == 9)
     ).group_by(
         # For all cells across all generations...
         'generation', 'x', 'y'
     ).agg(
-        # Sum all the hiff scores in this cell and divide by the number of
-        # living individuals in this cell.
-        pl.col('hiff').mean().alias('mean_hiff')
+        # Find the mean hiff score for all individuals in this cell.
+        pl.col('hiff').mean().alias('Mean Hiff')
     )
+
+    sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
+    pal = sns.cubehelix_palette(10, rot=-.25, light=.7)
+    grid = sns.FacetGrid(expt_data, row='generation', hue='generation',
+                         aspect=15, height=0.5, palette=pal)
+    grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
+             clip_on=False, fill=True, alpha=1.0)
+    grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
+             clip_on=False, color='w')
+
+    def label(x, color, label):
+        ax = plt.gca()
+        ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
+                transform=ax.transAxes)
+    grid.map(label, 'Mean Hiff')
+
+    # TODO: Titles?
+    grid.refline(y=0, linestyle='-', clip_on=False)
+    grid.figure.subplots_adjust(hspace=-0.25)
+    grid.set_titles('')
+    grid.set(yticks=[], ylabel='')
+    grid.despine(bottom=True, left=True)
+    grid.figure.suptitle(f'Hiff score distribution ({name})')
+    grid.figure.supylabel('Density')
+    grid.figure.savefig(path / 'hiff_dist.png', dpi=600)
+    plt.close()
+    return
+
     # Plot average hiff score for every cell across generations, using a
     # scatter plot so we can see the distribution of cells with high or low
     # hiff scores over evolutionary time.
@@ -152,26 +181,26 @@ def chart_all_results():
         path = OUTPUT_PATH / name
         expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
-        chart_fitness(path, name, expt_data)
+        #chart_fitness(path, name, expt_data)
         progress.update()
 
-        chart_hiff_max(path, name, expt_data)
+        #chart_hiff_max(path, name, expt_data)
         progress.update()
 
-        chart_hiff_sum(path, name, expt_data)
+        #chart_hiff_sum(path, name, expt_data)
         progress.update()
 
         chart_hiff_density(path, name, expt_data)
         progress.update()
 
-        chart_population_size(path, name, expt_data)
+        #chart_population_size(path, name, expt_data)
         progress.update()
 
-        chart_survival(path, name, expt_data)
+        #chart_survival(path, name, expt_data)
         progress.update()
 
         try:
-            chart_diversity(path, name, expt_data)
+            #chart_diversity(path, name, expt_data)
             progress.update()
         except:
             print("diversity didn't save")

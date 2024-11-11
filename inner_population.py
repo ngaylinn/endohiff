@@ -31,7 +31,9 @@ DEAD_ID = 0
 
 @ti.data_oriented
 class InnerPopulation:
-    def __init__(self):
+    def __init__(self, use_crossover, use_migration):
+        self.use_crossover = use_crossover
+        self.use_migration = use_migration
         self.refill_rate = REFILL_RATE
         self.random_refill = True
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
@@ -173,7 +175,10 @@ class InnerPopulation:
 
                 # creating a child from the individual and performing crossover
                 child = Individual()
-                child.bitstr = diverse_crossover(parent.bitstr, mate.bitstr) #CHANGED TO UNIFORM_CROSSOVER
+                if self.use_crossover:
+                    child.bitstr = diverse_crossover(parent.bitstr, mate.bitstr) #CHANGED TO UNIFORM_CROSSOVER
+                else:
+                    child.bitstr = parent.bitstr
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
@@ -195,7 +200,8 @@ class InnerPopulation:
 
     def propagate(self, environment, generation):
         # TODO: Experiment with different orders...
-        self.migrate(generation)
+        if self.use_migration:
+            self.migrate(generation)
         self.refill_empty_spaces(generation)
         self.populate_children(environment, generation)
 

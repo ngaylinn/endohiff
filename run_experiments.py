@@ -1,3 +1,6 @@
+from argparse import ArgumentParser
+import sys
+
 import numpy as np
 import polars as pl
 import taichi as ti
@@ -29,7 +32,7 @@ def print_summary(name, expt_data):
     print()
 
 
-def run_experiments():
+def run_experiments(crossover, migration):
     # Make a place to save results.
     OUTPUT_PATH.mkdir(exist_ok=True)
 
@@ -41,7 +44,8 @@ def run_experiments():
         path.mkdir(exist_ok=True)
 
         # Run the condition and cache the results.
-        inner_population = InnerPopulation()
+        inner_population = InnerPopulation(
+            bool(crossover), bool(migration))
         environment = make_environment()
         inner_log = evolve(inner_population, environment)
 
@@ -52,10 +56,18 @@ def run_experiments():
         # always static, but eventually it will be evolved.
         np.savez(path / 'env.npz', **environment.to_numpy())
 
-        
         # Summarize results on the command line.
         print_summary(name, inner_log)
 
 
 if __name__ == '__main__':
-    run_experiments()
+    parser = ArgumentParser(
+        description='Simulate endosymbiotic microbes.')
+    parser.add_argument(
+        '--crossover', '-c', type=int, default=1,
+        help='Enable crossover')
+    parser.add_argument(
+        '--migration', '-m', type=int, default=1,
+        help='Enable migration')
+    print(parser.parse_args())
+    run_experiments(**vars(parser.parse_args()))
