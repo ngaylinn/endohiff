@@ -121,8 +121,6 @@ def make_baym():
 ENVIRONMENTS = {
     'flat': make_flat,
     'random': make_random,
-    'nate1': make_nate1,
-    'nate2': make_nate2,
     'baym': make_baym,
 }
 

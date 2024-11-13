@@ -46,6 +46,7 @@ class InnerPopulation:
 
         self.fitness_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.genetic_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
+        self.spatial_genetic_diversity = ti.field(dtype=ti.f32, shape=ENVIRONMENT_SHAPE) #new for genetic diversity
 
 
 
@@ -116,7 +117,7 @@ class InnerPopulation:
 
 
     @ti.kernel
-    def evaluate(self, environment: ti.template(), g: int):
+    def evaluate(self, environment: ti.template(), g: ti.i32, migration: ti.template(), crossover: ti.template()):
         fitness_sum = 0.0
         count = 0
         # Variables for calculating standard deviation
@@ -149,50 +150,50 @@ class InnerPopulation:
         # TODO: calc other whole-pop by-generation stuff?? 
         
 
-    @ti.kernel
-    def migrate(self, g: int):
-        # TODO: Try out different migration strategies!
-        # Ways to do migration:
-        # - When does migration happen?
-        #   - Before / after reproduction?
-        #   - # of migrations per generation?
-        # - How do individuals move?
-        #   - "Acorn drop"
-        #   - "Walk" to adjacent cell
-        #   - Random shuffling
-        #   - Move, or clone?
-        # - How do you resolve competition?
-        #   - Reserve some spots for migrants
-        #   - Fill empty spots first
-        #   - Let migrants overwrite locals
-        #   - Replace local only if fitter
-        # - How selective?
-        #   - Random / more fit individuals migrate
-        #   - Replace random / less fit individuals
-        for x, y, i in ti.ndrange(*self.shape):
-            # This magic number was calculated by brute force such that two
-            # samples from a standard normal distribution will be (0, 0) 90% of
-            # the time (meaning, migration happens 10% of the time).
-            scale_factor = 0.5
+    # @ti.kernel
+    # def migrate(self, g: int):
+    #     # TODO: Try out different migration strategies!
+    #     # Ways to do migration:
+    #     # - When does migration happen?
+    #     #   - Before / after reproduction?
+    #     #   - # of migrations per generation?
+    #     # - How do individuals move?
+    #     #   - "Acorn drop"
+    #     #   - "Walk" to adjacent cell
+    #     #   - Random shuffling
+    #     #   - Move, or clone?
+    #     # - How do you resolve competition?
+    #     #   - Reserve some spots for migrants
+    #     #   - Fill empty spots first
+    #     #   - Let migrants overwrite locals
+    #     #   - Replace local only if fitter
+    #     # - How selective?
+    #     #   - Random / more fit individuals migrate
+    #     #   - Replace random / less fit individuals
+    #     for x, y, i in ti.ndrange(*self.shape):
+    #         # This magic number was calculated by brute force such that two
+    #         # samples from a standard normal distribution will be (0, 0) 90% of
+    #         # the time (meaning, migration happens 10% of the time).
+    #         scale_factor = 0.5
 
-            # "Acorn drop": draw from a standard normal distribution to find a
-            # new home for this individual.
-            dx = ti.round(scale_factor*ti.randn())
-            dy = ti.round(scale_factor*ti.randn())
+    #         # "Acorn drop": draw from a standard normal distribution to find a
+    #         # new home for this individual.
+    #         dx = ti.round(scale_factor*ti.randn())
+    #         dy = ti.round(scale_factor*ti.randn())
 
-            # Make sure the new location is in bounds. This might cause
-            # migrants to "pile up" at the edges of the environment.
-            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
-            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
-            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+    #         # Make sure the new location is in bounds. This might cause
+    #         # migrants to "pile up" at the edges of the environment.
+    #         new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
+    #         new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+    #         new_i = ti.random(ti.int32) % CARRYING_CAPACITY
 
-            if new_x != x and new_y != y:
-                # Move this individual to a random spot in a nearby location,
-                # possibly overwriting an existing individual there. Then,
-                # leave this spot empty.
-                individual = self.pop[g, x, y, i]
-                self.pop[g, new_x, new_y, new_i] = individual
-                self.pop[g, x, y, i] = DEAD
+    #         if new_x != x and new_y != y:
+    #             # Move this individual to a random spot in a nearby location,
+    #             # possibly overwriting an existing individual there. Then,
+    #             # leave this spot empty.
+    #             individual = self.pop[g, x, y, i]
+    #             self.pop[g, new_x, new_y, new_i] = individual
+    #             self.pop[g, x, y, i] = DEAD
 
 
     # def migrate_experiment(self, gen):
@@ -206,55 +207,55 @@ class InnerPopulation:
     #     else:
     #         self.migrate_selective(gen)
 
-    @ti.kernel
-    def migrate_acorn_drop(self, g: int):
-        # baseline migration strategy - same as migrate() above 
-        for x, y, i in ti.ndrange(*self.shape):
-            scale_factor = 0.5
-            dx = ti.round(scale_factor * ti.randn())
-            dy = ti.round(scale_factor * ti.randn())
+    # @ti.kernel
+    # def migrate_acorn_drop(self, g: int):
+    #     # baseline migration strategy - same as migrate() above 
+    #     for x, y, i in ti.ndrange(*self.shape):
+    #         scale_factor = 0.5
+    #         dx = ti.round(scale_factor * ti.randn())
+    #         dy = ti.round(scale_factor * ti.randn())
             
-            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
-            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
-            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+    #         new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
+    #         new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+    #         new_i = ti.random(ti.int32) % CARRYING_CAPACITY
 
-            if new_x != x and new_y != y:
-                individual = self.pop[g, x, y, i]
-                self.pop[g, new_x, new_y, new_i] = individual
-                self.pop[g, x, y, i] = DEAD
+    #         if new_x != x and new_y != y:
+    #             individual = self.pop[g, x, y, i]
+    #             self.pop[g, new_x, new_y, new_i] = individual
+    #             self.pop[g, x, y, i] = DEAD
 
-    @ti.kernel
-    def migrate_walk(self, g: int):
-        # This strategy involves walking individuals to an adjacent cell (left, right, up, or down) with a 10% chance of migration.
-        for x, y, i in ti.ndrange(*self.shape):
-            # new x, y, i init
-            new_x = x
-            new_y = y
-            new_i = i
-            if ti.random() < 0.1:  # 10% chance to migrate
-                direction = ti.random(ti.i32) % 4  # Choose a random direction
+    # @ti.kernel
+    # def migrate_walk(self, g: int):
+    #     # This strategy involves walking individuals to an adjacent cell (left, right, up, or down) with a 10% chance of migration.
+    #     for x, y, i in ti.ndrange(*self.shape):
+    #         # new x, y, i init
+    #         new_x = x
+    #         new_y = y
+    #         new_i = i
+    #         if ti.random() < 0.1:  # 10% chance to migrate
+    #             direction = ti.random(ti.i32) % 4  # Choose a random direction
                 
-                # Determine new_x and new_y based on direction
-                if direction == 0:  # Move left
-                    new_x = max(x - 1, 0)
-                    new_y = y
-                elif direction == 1:  # Move right
-                    new_x = min(x + 1, ENVIRONMENT_SHAPE[0] - 1)
-                    new_y = y
-                elif direction == 2:  # Move up
-                    new_x = x
-                    new_y = max(y - 1, 0)
-                else:  # Move down
-                    new_x = x
-                    new_y = min(y + 1, ENVIRONMENT_SHAPE[1] - 1)
+    #             # Determine new_x and new_y based on direction
+    #             if direction == 0:  # Move left
+    #                 new_x = max(x - 1, 0)
+    #                 new_y = y
+    #             elif direction == 1:  # Move right
+    #                 new_x = min(x + 1, ENVIRONMENT_SHAPE[0] - 1)
+    #                 new_y = y
+    #             elif direction == 2:  # Move up
+    #                 new_x = x
+    #                 new_y = max(y - 1, 0)
+    #             else:  # Move down
+    #                 new_x = x
+    #                 new_y = min(y + 1, ENVIRONMENT_SHAPE[1] - 1)
                 
-                # Choose a random individual index to migrate to the new position
-                new_i = ti.random(ti.i32) % CARRYING_CAPACITY
+    #             # Choose a random individual index to migrate to the new position
+    #             new_i = ti.random(ti.i32) % CARRYING_CAPACITY
 
-                if new_x != x and new_y != y:
-                    individual = self.pop[g, x, y, i]
-                    self.pop[g, new_x, new_y, new_i] = individual
-                    self.pop[g, x, y, i] = DEAD
+    #             if new_x != x and new_y != y:
+    #                 individual = self.pop[g, x, y, i]
+    #                 self.pop[g, new_x, new_y, new_i] = individual
+    #                 self.pop[g, x, y, i] = DEAD
 
 
     @ti.kernel
@@ -279,39 +280,39 @@ class InnerPopulation:
                     self.pop[g, new_x, new_y, new_i] = individual
                     self.pop[g, x, y, i] = DEAD
 
-    @ti.kernel
-    def migrate_selective(self, g: int):
-    # migrant selected by tournament selection
-        # selects the fittest indivs for migration
-        for x, y, i in ti.ndrange(*self.shape):
-            # Magic number: 10% chance of migration
-            scale_factor = 0.5
+    # @ti.kernel
+    # def migrate_selective(self, g: int):
+    # # migrant selected by tournament selection
+    #     # selects the fittest indivs for migration
+    #     for x, y, i in ti.ndrange(*self.shape):
+    #         # Magic number: 10% chance of migration
+    #         scale_factor = 0.5
 
-            # "Acorn drop": use a normal distribution to find a new home for this individual
-            dx = ti.round(scale_factor * ti.randn())
-            dy = ti.round(scale_factor * ti.randn())
+    #         # "Acorn drop": use a normal distribution to find a new home for this individual
+    #         dx = ti.round(scale_factor * ti.randn())
+    #         dy = ti.round(scale_factor * ti.randn())
 
-            # Ensure the new location is within bounds
-            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
-            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
-            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+    #         # Ensure the new location is within bounds
+    #         new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
+    #         new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+    #         new_i = ti.random(ti.int32) % CARRYING_CAPACITY
 
-            if new_x != x or new_y != y:
-                # competing resident location
-                individual = self.pop[g, x, y, i] 
+    #         if new_x != x or new_y != y:
+    #             # competing resident location
+    #             individual = self.pop[g, x, y, i] 
 
-                # Perform tournament selection to choose a migrant from the current location
-                migrant = tournament_selection(self.pop, g, new_x, new_y)
+    #             # Perform tournament selection to choose a migrant from the current location
+    #             migrant = tournament_selection(self.pop, g, new_x, new_y)
 
-                # Migrate or replace: replace an individual only if the migrant is fitter
-                if migrant.fitness > individual.fitness:
-                    # Overwrite the local individual with the migrant
-                    self.pop[g, new_x, new_y, new_i] = migrant
-                    self.pop[g, x, y, i] = DEAD
-                else:
-                    # If the migrant is less fit, do not overwrite
-                    self.pop[g, new_x, new_y, new_i] = individual
-                    self.pop[g, x, y, i] = DEAD
+    #             # Migrate or replace: replace an individual only if the migrant is fitter
+    #             if migrant.fitness > individual.fitness:
+    #                 # Overwrite the local individual with the migrant
+    #                 self.pop[g, new_x, new_y, new_i] = migrant
+    #                 self.pop[g, x, y, i] = DEAD
+    #             else:
+    #                 # If the migrant is less fit, do not overwrite
+    #                 self.pop[g, new_x, new_y, new_i] = individual
+    #                 self.pop[g, x, y, i] = DEAD
 
     @ti.kernel
     def refill_empty_spaces(self, g: int):
@@ -335,7 +336,7 @@ class InnerPopulation:
 
 
     @ti.kernel
-    def populate_children(self, environment: ti.template(), g: int):
+    def populate_children(self, environment: ti.template(), g: int, crossover: ti.template()):
         for x, y, i in ti.ndrange(*self.shape):
             parent = self.pop[g, x, y, i]
 
@@ -350,7 +351,8 @@ class InnerPopulation:
 
                 # creating a child from the individual and performing crossover
                 child = Individual()
-                child.bitstr = diverse_crossover(parent.bitstr, mate.bitstr) #CHANGED TO UNIFORM_CROSSOVER
+                if crossover:
+                    child.bitstr = diverse_crossover(parent.bitstr, mate.bitstr) #CHANGED TO UNIFORM_CROSSOVER
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
@@ -370,11 +372,12 @@ class InnerPopulation:
         self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
 
 
-    def propagate(self, environment, generation):
-        # TODO: Experiment with different orders...       
-        self.migrate(generation)
+    def propagate(self, environment, generation, migrate, crossover):
+        # TODO: Experiment with different orders...   
+        if migrate:    
+            self.migrate_overwriting(generation)
         self.refill_empty_spaces(generation)
-        self.populate_children(environment, generation)
+        self.populate_children(environment, generation, crossover)
 
 
     def to_numpy(self):

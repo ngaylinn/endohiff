@@ -6,7 +6,8 @@ import seaborn as sns
 from tqdm import trange
 
 from constants import INNER_GENERATIONS, MAX_HIFF, MAX_POPULATION_SIZE, MIN_HIFF, OUTPUT_PATH
-from run_experiments import CONDITION_NAMES
+# from run_experiments import CONDITION_NAMES
+from environment import ENVIRONMENTS
 
 
 def chart_fitness(path, name, expt_data):
@@ -148,41 +149,48 @@ def chart_genetic_diversity(path, name, df):
     plt.close()
 
 def chart_all_results():
+    from run_experiments import CONDITION_NAMES
+
     # TODO: Consider using styles from Aquarel project?
     sns.set_theme()
 
     num_artifacts = 7 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
-    for name in CONDITION_NAMES:
-        path = OUTPUT_PATH / name
-        expt_data = pl.read_parquet(path / 'inner_log.parquet')
+    # Iterate through all the unique combinations to plot
+    for crossover in [True, False]:
+        for migration in [True, False]:
+            for env in ENVIRONMENTS.keys():
+                name = env
+                path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
+                try:
+                    expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
-        whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
+                    whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
-        chart_fitness(path, name, expt_data)
-        progress.update()
+                    # chart_fitness(path, name, expt_data)
+                    progress.update()
 
-        chart_hiff_max(path, name, expt_data)
-        progress.update()
+                    # chart_hiff_max(path, name, expt_data)
+                    progress.update()
 
-        chart_hiff_sum(path, name, expt_data)
-        progress.update()
+                    # chart_hiff_sum(path, name, expt_data)
+                    progress.update()
 
-        chart_hiff_density(path, name, expt_data)
-        progress.update()
+                    chart_hiff_density(path, name, expt_data)
+                    progress.update()
 
-        chart_population_size(path, name, expt_data)
-        progress.update()
+                    # chart_population_size(path, name, expt_data)
+                    progress.update()
 
-        chart_survival(path, name, expt_data)
-        progress.update()
+                    # chart_survival(path, name, expt_data)
+                    progress.update()
 
-        try:
-            chart_fitness_diversity(path, name, whole_pop_metrics)
-            chart_genetic_diversity(path, name, whole_pop_metrics)
-            progress.update()
-        except Exception as e:
-            print(f"diversity didn't save: {e}")
+                
+                    chart_fitness_diversity(path, name, whole_pop_metrics)
+                    chart_genetic_diversity(path, name, whole_pop_metrics)
+                    progress.update()
+                except Exception as e:
+                    print(f"Could not process {path}: {e}")
 
 
 if __name__ == '__main__':

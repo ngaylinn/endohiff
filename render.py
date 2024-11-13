@@ -12,6 +12,7 @@ from constants import (
     BITSTR_POWER, BITSTR_LEN, CARRYING_CAPACITY, ENVIRONMENT_SHAPE,
     INNER_GENERATIONS, NUM_WEIGHTS, MAX_HIFF, MIN_HIFF, OUTPUT_PATH)
 from run_experiments import CONDITION_NAMES
+from environment import ENVIRONMENTS
 
 BORDER_COLOR = '#007155'  # UVM Green
 
@@ -215,42 +216,50 @@ def render_genetic_diversity_map(path, name, genetic_diversity_map):
 def save_all_results():
     num_artifacts = 4 * len(CONDITION_NAMES) # QUESTION: do we need to update this as I add in more maps?
     progress = trange(num_artifacts)
-    for name in CONDITION_NAMES:
-        path = OUTPUT_PATH / name
-        expt_data = pl.read_parquet(path / 'inner_log.parquet')
+    for crossover in [True, False]:
+        for migration in [True, False]:
+            for env in ENVIRONMENTS.keys():
+                name = env
+                path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
 
-        whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
+                try:
+                    expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
-        # Save an animation of fitness over time.
-        save_hiff_animation(path, expt_data)
-        progress.update()
+                    whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
-        # Restrict to the last generation and render maps of the final fitnes
-        # and HIFF scores.
-        expt_data = expt_data.filter(
-            pl.col('generation') == INNER_GENERATIONS - 1
-        )
+                    # Save an animation of fitness over time.
+                    save_hiff_animation(path, expt_data)
+                    progress.update()
 
-        save_fitness_map(path, name, expt_data)
-        progress.update()
+                    # Restrict to the last generation and render maps of the final fitnes
+                    # and HIFF scores.
+                    expt_data = expt_data.filter(
+                        pl.col('generation') == INNER_GENERATIONS - 1
+                    )
 
-        save_hiff_map(path, name, expt_data)
-        progress.update()
+                    save_fitness_map(path, name, expt_data)
+                    progress.update()
 
-        save_avg_hiff_map(path, name, expt_data)
-        progress.update()
+                    save_hiff_map(path, name, expt_data)
+                    progress.update()
 
-        # # adding for spatial genetic diversity
-        # pop_data = expt_data.select('fitness').to_numpy().flatten()
-        # genetic_diversity_map = calculate_genetic_diversity(pop_data)
-        # render_genetic_diversity_map(path, name, genetic_diversity_map)
-        # progress.update()       
+                    save_avg_hiff_map(path, name, expt_data)
+                    progress.update()
 
-        # Load and render the environment where this experiment happened.
-        env_data = np.load(path / 'env.npz')
+                    # # adding for spatial genetic diversity
+                    # pop_data = expt_data.select('fitness').to_numpy().flatten()
+                    # genetic_diversity_map = calculate_genetic_diversity(pop_data)
+                    # render_genetic_diversity_map(path, name, genetic_diversity_map)
+                    # progress.update()       
 
-        save_env_map(path, name, env_data)
-        progress.update()
+                    # Load and render the environment where this experiment happened.
+                    env_data = np.load(path / 'env.npz')
+
+                    save_env_map(path, name, env_data)
+                    progress.update()
+
+                except Exception as e:
+                    print(f"Could not process {path}: {e}")
 
 
 if __name__ == '__main__':
