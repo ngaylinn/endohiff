@@ -167,18 +167,33 @@ bringing a genetic diversity calc function in directly to render for expt data
 to keep the amount of extra data craziness to a min -- this is coming directly from 
 fitness vals already in the expt data
 '''
-def calculate_genetic_diversity(pop_data):
+def calculate_genetic_diversity(expt_data, final_generation):
     """
-    Calculate genetic diversity for each cell in the environment.
+    Calculate genetic diversity for each cell in the environment using Hamming distance.
     Args:
-        pop_data: numpy array of shape (NUM_INDIVIDUALS, BITSTR_LEN)
+        expt_data: Polars DataFrame with the 'bitstr' column.
+        final_generation: The final generation number to filter the data.
     Returns:
         2D numpy array of genetic diversity values for each cell.
     """
-    pop_data_reshaped = pop_data.reshape(ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY, BITSTR_LEN)
+    # Filter for the final generation
+    expt_data_final_gen = expt_data.filter(pl.col('generation') == final_generation)
+    
+    # Extract and reshape bitstring data
+    bitstr_data = expt_data_final_gen['bitstr'].to_numpy()
+
+    # Calculate expected shape
+    expected_shape = (ENVIRONMENT_SHAPE[0], ENVIRONMENT_SHAPE[1], CARRYING_CAPACITY)
+    
+    # Check if the number of elements matches the expected shape
+    if bitstr_data.size != np.prod(expected_shape):
+        raise ValueError(f"bitstr_data cannot be reshaped to {expected_shape}, check the data dimensions.")
+    
+    # Reshape bitstr_data to match the environment shape and carrying capacity
+    bitstr_data = bitstr_data.reshape(expected_shape)
     
     genetic_diversity_map = np.zeros(ENVIRONMENT_SHAPE)
-
+    
     for x in range(ENVIRONMENT_SHAPE[0]):
         for y in range(ENVIRONMENT_SHAPE[1]):
             genetic_sum = 0.0
@@ -186,10 +201,14 @@ def calculate_genetic_diversity(pop_data):
             count = 0
             for i in range(CARRYING_CAPACITY):
                 for j in range(i + 1, CARRYING_CAPACITY):
-                    bitstring1 = pop_data_reshaped[x, y, i]
-                    bitstring2 = pop_data_reshaped[x, y, j]
-                    if np.any(bitstring1) and np.any(bitstring2):  # Ensure individuals are not dead
-                        hamming_dist = np.sum(bitstring1 != bitstring2)
+                    bitstring1 = bitstr_data[x, y, i]
+                    bitstring2 = bitstr_data[x, y, j]
+                    if bitstring1 != 0 and bitstring2 != 0:  # Ensure individuals are not dead
+                        # Convert bitstrings to binary arrays
+                        bitstring1_bits = np.array(list(np.binary_repr(bitstring1, width=BITSTR_LEN)), dtype=np.int8)
+                        bitstring2_bits = np.array(list(np.binary_repr(bitstring2, width=BITSTR_LEN)), dtype=np.int8)
+                        
+                        hamming_dist = np.sum(bitstring1_bits != bitstring2_bits)
                         genetic_sum += hamming_dist
                         genetic_squared_sum += hamming_dist ** 2
                         count += 1
@@ -221,6 +240,7 @@ def save_all_results():
             for env in ENVIRONMENTS.keys():
                 name = env
                 path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
+                FINAL_GENERATION = INNER_GENERATIONS - 1
 
                 try:
                     expt_data = pl.read_parquet(path / 'inner_log.parquet')
@@ -246,11 +266,10 @@ def save_all_results():
                     save_avg_hiff_map(path, name, expt_data)
                     progress.update()
 
-                    # # adding for spatial genetic diversity
-                    # pop_data = expt_data.select('fitness').to_numpy().flatten()
-                    # genetic_diversity_map = calculate_genetic_diversity(pop_data)
-                    # render_genetic_diversity_map(path, name, genetic_diversity_map)
-                    # progress.update()       
+
+                    genetic_diversity_map = calculate_genetic_diversity(expt_data, FINAL_GENERATION)
+                    render_genetic_diversity_map(path, name, genetic_diversity_map)
+                    progress.update()       
 
                     # Load and render the environment where this experiment happened.
                     env_data = np.load(path / 'env.npz')
@@ -260,6 +279,7 @@ def save_all_results():
 
                 except Exception as e:
                     print(f"Could not process {path}: {e}")
+
 
 
 if __name__ == '__main__':
