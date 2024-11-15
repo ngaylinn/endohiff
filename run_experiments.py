@@ -33,13 +33,7 @@ def print_summary(name, expt_data, migration, crossover):
 
 
 def run_experiments():
-
-    from chart import chart_all_results
-    from render import save_all_results
-    from chart_across_experiments import chart_across_experiments
-
     OUTPUT_PATH.mkdir(exist_ok=True)
-
 
     for migration in [True, False]:
         for crossover in [True, False]:
@@ -61,15 +55,6 @@ def run_experiments():
                 np.savez(path / 'env.npz', **environment.to_numpy())
 
                 print_summary(name, inner_log, migration, crossover)
-
-    # Call chart.py functions after experiments
-    chart_all_results(subfolder_path)
-
-    # Call chart_across_experiments.py functions after experiments
-    chart_across_experiments()
-
-    # Call render.py functions after experiments
-    save_all_results()
 
 
 if __name__ == '__main__':

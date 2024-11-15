@@ -1,5 +1,4 @@
 from math import sqrt
-from pathlib import Path
 
 import einops
 from matplotlib.animation import FuncAnimation
@@ -10,7 +9,7 @@ from tqdm import trange
 
 from constants import (
     BITSTR_POWER, BITSTR_LEN, CARRYING_CAPACITY, ENVIRONMENT_SHAPE,
-    INNER_GENERATIONS, NUM_WEIGHTS, MAX_HIFF, MIN_HIFF, OUTPUT_PATH)
+    INNER_GENERATIONS, NUM_WEIGHTS, MAX_HIFF, OUTPUT_PATH)
 from run_experiments import CONDITION_NAMES
 from environment import ENVIRONMENTS
 
@@ -233,7 +232,7 @@ def render_genetic_diversity_map(path, name, genetic_diversity_map):
 
 
 def save_all_results():
-    num_artifacts = 4 * len(CONDITION_NAMES) # QUESTION: do we need to update this as I add in more maps?
+    num_artifacts = 4 * 6 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     for crossover in [True, False]:
         for migration in [True, False]:
@@ -244,8 +243,6 @@ def save_all_results():
 
                 try:
                     expt_data = pl.read_parquet(path / 'inner_log.parquet')
-
-                    whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
                     # Save an animation of fitness over time.
                     save_hiff_animation(path, expt_data)

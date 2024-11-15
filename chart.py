@@ -154,7 +154,7 @@ def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
     sns.set_theme()
 
-    num_artifacts = 7 * len(CONDITION_NAMES)
+    num_artifacts = 4 * 3 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     # Iterate through all the unique combinations to plot
     for crossover in [True, False]:
@@ -168,25 +168,26 @@ def chart_all_results():
                     whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
                     # chart_fitness(path, name, expt_data)
-                    progress.update()
+                    # progress.update()
 
                     # chart_hiff_max(path, name, expt_data)
-                    progress.update()
+                    # progress.update()
 
                     # chart_hiff_sum(path, name, expt_data)
-                    progress.update()
+                    # progress.update()
 
                     chart_hiff_density(path, name, expt_data)
                     progress.update()
 
                     # chart_population_size(path, name, expt_data)
-                    progress.update()
+                    # progress.update()
 
                     # chart_survival(path, name, expt_data)
+                    # progress.update()
+
+                    chart_fitness_diversity(path, name, whole_pop_metrics)
                     progress.update()
 
-                
-                    chart_fitness_diversity(path, name, whole_pop_metrics)
                     chart_genetic_diversity(path, name, whole_pop_metrics)
                     progress.update()
                 except Exception as e:

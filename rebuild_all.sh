@@ -9,8 +9,11 @@ rm -rf output
 echo "Simulating evolution..."
 python3 ./run_experiments.py
 
-echo "Generating charts of progress..."
+echo "Generating charts for single experiments..."
 python3 ./chart.py
+
+echo "Generating charts comparing experiments..."
+python3 ./chart_across_experiments.py
 
 echo "Rendering visualizations of results..."
 python3 ./render.py

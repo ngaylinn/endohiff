@@ -2,6 +2,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
+from tqdm import trange
 
 from constants import INNER_GENERATIONS, OUTPUT_PATH, MAX_HIFF
 from environment import ENVIRONMENTS
@@ -11,7 +12,7 @@ def chart_across_experiments():
 
     for crossover in [True, False]:
         for migration in [True, False]:
-            for env, make_environment in ENVIRONMENTS.items():
+            for env in ENVIRONMENTS.keys():
                 path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
                 if (path / 'inner_log.parquet').exists():
                     frames.append(pl.read_parquet(
@@ -23,11 +24,12 @@ def chart_across_experiments():
                         migration=pl.lit(migration)
                     ))
 
-    if not frames:
-        print("No data found to plot.")
-        return
-
     all_data = pl.concat(frames)
+
+    # TODO: We don't actually need to make 4 copies. Refactor this to get rid
+    # of the nested loop.
+    num_artifacts = 4 * 2 * len(ENVIRONMENTS)
+    progress = trange(num_artifacts)
 
     # Iterate through all the unique combinations to plot
     for crossover in [True, False]:
@@ -67,6 +69,7 @@ def chart_across_experiments():
                     fig.savefig(variant_path / f'hiff_dist_{name}.png', dpi=600)
                     plt.tight_layout()
                     plt.close()
+                progress.update()
 
                 env_data = all_data.filter(
                     # Looking only at living individuals...
@@ -93,7 +96,7 @@ def chart_across_experiments():
                     fig.savefig(env_path / f'hiff_dist.png', dpi=600)
                     plt.tight_layout()
                     plt.close()
+                progress.update()
 
-    print('done.')
-
-chart_across_experiments()
+if __name__ == '__main__':
+    chart_across_experiments()
