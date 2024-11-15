@@ -1,4 +1,5 @@
 from pathlib import Path
+import warnings
 
 import matplotlib.pyplot as plt
 import polars as pl
@@ -9,6 +10,9 @@ from constants import INNER_GENERATIONS, MAX_HIFF, MAX_POPULATION_SIZE, MIN_HIFF
 # from run_experiments import CONDITION_NAMES
 from environment import ENVIRONMENTS
 
+
+# Making ridgeplots with Seaborn generates lots of these warnings.
+warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
 
 def chart_fitness(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('fitness').max())
@@ -38,26 +42,44 @@ def chart_hiff_sum(path, name, expt_data):
     plt.close()
 
 
-def chart_hiff_density(path, name, expt_data):
+def chart_hiff_dist(path, name, expt_data):
     expt_data = expt_data.filter(
         # Looking only at living individuals...
-        pl.col('id') > 0
+        (pl.col('id') > 0) &
+        # Sample every ten generations...
+        (pl.col('Generation') % 10 == 9)
     ).group_by(
         # For all cells across all generations...
-        'generation', 'x', 'y'
+        'Generation', 'x', 'y'
     ).agg(
-        # Sum all the hiff scores in this cell and divide by the number of
-        # living individuals in this cell.
-        pl.col('hiff').mean().alias('mean_hiff')
+        # Find the mean hiff score for all individuals in this cell.
+        pl.col('hiff').mean().alias('Mean Hiff')
     )
-    # Plot average hiff score for every cell across generations, using a
-    # scatter plot so we can see the distribution of cells with high or low
-    # hiff scores over evolutionary time.
-    fig = sns.relplot(data=expt_data, x='generation', y='mean_hiff',
-                      kind='scatter', alpha=0.1, marker='.')
-    plt.ylim(0, MAX_HIFF)
-    fig.set(title=f'Hiff density ({name})')
-    fig.savefig(path / 'hiff_density.png', dpi=600)
+
+    sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
+    pal = sns.cubehelix_palette(10, rot=-.25, light=.7)
+    grid = sns.FacetGrid(expt_data, row='Generation', hue='Generation',
+                         aspect=15, height=0.5, palette=pal)
+    plt.xlim(0, MAX_HIFF)
+    grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
+             clip_on=False, fill=True, alpha=1.0)
+    grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
+             clip_on=False, color='w')
+
+    def label(x, color, label):
+        ax = plt.gca()
+        ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
+                transform=ax.transAxes)
+    grid.map(label, 'Mean Hiff')
+
+    grid.refline(y=0, linestyle='-', clip_on=False)
+    grid.figure.subplots_adjust(hspace=-0.25)
+    grid.set_titles('')
+    grid.set(yticks=[], ylabel='')
+    grid.despine(bottom=True, left=True)
+    grid.figure.suptitle(f'Hiff score distribution ({name})')
+    grid.figure.supylabel('Density')
+    grid.figure.savefig(path / 'hiff_dist.png', dpi=600)
     plt.close()
 
 
@@ -135,14 +157,14 @@ def chart_survival(path, name, expt_data):
 
 
 def chart_fitness_diversity(path, name, df):
-    fig = sns.relplot(data=df, x='generation', y='fitness_diversity', kind='line')
+    fig = sns.relplot(data=df, x='Generation', y='Fitness Diversity', kind='line')
     fig.set(ylim=(0, 50))  # Set y-axis limits from 0 to 50 - consistent for all environments
     fig.set(title=f'Fitness Diversity ({name})')
     fig.savefig(path / 'fitness_diversity.png', dpi=600)
     plt.close()
 
 def chart_genetic_diversity(path, name, df):
-    fig = sns.relplot(data=df, x='generation', y='genetic_diversity', kind='line')
+    fig = sns.relplot(data=df, x='Generation', y='Genetic Diversity', kind='line')
     fig.set(ylim=(0, 50))  # Set y-axis limits from 0 to 50 - consistent for all environments
     fig.set(title=f'Genetic Diversity ({name})')
     fig.savefig(path / 'genetic_diversity.png', dpi=600)
@@ -176,7 +198,7 @@ def chart_all_results():
                     # chart_hiff_sum(path, name, expt_data)
                     # progress.update()
 
-                    chart_hiff_density(path, name, expt_data)
+                    chart_hiff_dist(path, name, expt_data)
                     progress.update()
 
                     # chart_population_size(path, name, expt_data)

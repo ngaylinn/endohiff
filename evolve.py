@@ -11,7 +11,7 @@ g = INNER_GENERATIONS
 w, h = ENVIRONMENT_SHAPE
 c = CARRYING_CAPACITY
 index = pl.DataFrame({
-    'generation': np.arange(g).repeat(w * h * c),
+    'Generation': np.arange(g).repeat(w * h * c),
     'x': np.tile(np.arange(w).repeat(h * c), g),
     'y': np.tile(np.arange(h).repeat(c), g * w),
     'diversity': np.arange(g).repeat(w * h * c),
@@ -19,9 +19,9 @@ index = pl.DataFrame({
 
 # init. whole-pop metric df
 whole_pop_metrics_df = pl.DataFrame({
-    'generation': np.arange(INNER_GENERATIONS),
-    'fitness_diversity': [0.0] * INNER_GENERATIONS,  # Initialize with zeros
-    'genetic_diversity': [0.0] * INNER_GENERATIONS
+    'Generation': np.arange(INNER_GENERATIONS),
+    'Fitness Diversity': [0.0] * INNER_GENERATIONS,  # Initialize with zeros
+    'Genetic Diversity': [0.0] * INNER_GENERATIONS
     # TODO: add new metrics later :)
 })
 
@@ -45,15 +45,15 @@ def evolve(inner_population, environment, migration, crossover):
 
         # Update the fitness value for this generation using set
         whole_pop_metrics_df = whole_pop_metrics_df.with_columns(
-            pl.when(pl.col('generation') == inner_generation)
+            pl.when(pl.col('Generation') == inner_generation)
             .then(current_gen_fitness_diversity)
-            .otherwise(pl.col('fitness_diversity'))
-            .alias('fitness_diversity')
+            .otherwise(pl.col('Fitness Diversity'))
+            .alias('Fitness Diversity')
         ).with_columns(
-            pl.when(pl.col('generation') == inner_generation)
+            pl.when(pl.col('Generation') == inner_generation)
             .then(current_gen_genetic_diversity)
-            .otherwise(pl.col('genetic_diversity'))
-            .alias('genetic_diversity')
+            .otherwise(pl.col('Genetic Diversity'))
+            .alias('Genetic Diversity')
         )
 
         if inner_generation + 1 < INNER_GENERATIONS:
