@@ -34,7 +34,7 @@ def evolve(inner_population, environment, migration, crossover):
     genetic_diversity_list = []
     bitstrings_list = []  # List to store bitstrings of all individuals
     for inner_generation in range(INNER_GENERATIONS):
-        inner_population.evaluate(environment, inner_generation, migration, crossover)
+        inner_population.evaluate(environment, inner_generation)
         # TODO: add same stuff for other whole-population metrics
         current_gen_fitness_diversity = inner_population.fitness_diversity.to_numpy()
         current_gen_genetic_diversity = inner_population.genetic_diversity.to_numpy()

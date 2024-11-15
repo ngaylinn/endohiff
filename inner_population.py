@@ -99,7 +99,7 @@ class InnerPopulation:
 
 
     @ti.kernel
-    def evaluate(self, environment: ti.template(), g: ti.i32, migration: ti.template(), crossover: ti.template()):
+    def evaluate(self, environment: ti.template(), g: ti.i32):
         # For computing fitness diversity:
         fitness_sum = 0.0
         fitness_squared_sum = 0.0
