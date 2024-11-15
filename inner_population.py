@@ -82,46 +82,33 @@ class InnerPopulation:
     @ti.func
     def evaluate_fitness_diversity(self, fitness_sum: ti.f32, fitness_squared_sum: ti.f32, count: ti.i32) -> ti.types.vector(2, ti.f32):
         fitness_diversity = 0.0
-        pop_sum_fitness = fitness_sum
         if count > 0:
             average_fitness = fitness_sum / count
             variance = (fitness_squared_sum / count) - (average_fitness ** 2)
             fitness_diversity = ti.sqrt(variance)
-        return ti.Vector([fitness_diversity, pop_sum_fitness])
+        return ti.Vector([fitness_diversity, fitness_sum])
 
     @ti.func
-    def evaluate_genetic_diversity(self, generation: ti.i32) -> ti.types.vector(2, ti.f32):
-        # init everything to zero
-        genetic_sum = 0.0
-        genetic_squared_sum = 0.0
-        count = 0
-        
-        # looping through pop and comparing every bitstring to every other bitstring 
-        # obviously very computationally laborious... if there's a better way adjust by all means
-        for x, y, i in ti.ndrange(self.shape[0], self.shape[1], self.shape[2]):
-            for x2, y2, i2 in ti.ndrange(self.shape[0], self.shape[1], self.shape[2]):
-                if (x != x2 or y != y2 or i != i2) and self.pop[generation, x, y, i] != DEAD and self.pop[generation, x2, y2, i2] != DEAD:
-                    hamming_dist = self.hamming_distance(self.pop[generation, x, y, i], self.pop[generation, x2, y2, i2])
-                    genetic_sum += hamming_dist
-                    genetic_squared_sum += hamming_dist ** 2
-                    count += 1
-
+    def evaluate_genetic_diversity(self, distance_sum: ti.f32, distance_squared_sum: ti.f32, distance_count: ti.i32) -> ti.types.vector(2, ti.f32):
         genetic_diversity = 0.0
-        pop_sum_genetic = genetic_sum
-        if count > 0:
-            average_genetic = genetic_sum / count
-            variance = (genetic_squared_sum / count) - (average_genetic ** 2)
+        if distance_count > 0:
+            average_genetic = distance_sum / distance_count
+            variance = (distance_squared_sum / distance_count) - (average_genetic ** 2)
             genetic_diversity = ti.sqrt(variance) #sqrt of the variance
-            
-        return ti.Vector([genetic_diversity, pop_sum_genetic])    
+        return ti.Vector([genetic_diversity, distance_sum])
 
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: ti.i32, migration: ti.template(), crossover: ti.template()):
+        # For computing fitness diversity:
         fitness_sum = 0.0
-        count = 0
-        # Variables for calculating standard deviation
         fitness_squared_sum = 0.0
+        fitness_count = 0
+
+        # For computing genetic diversity
+        distance_sum = 0.0
+        distance_squared_sum = 0.0
+        distance_count = 0
 
         for x, y, i in ti.ndrange(*self.shape):
             fitness, hiff = 0.0, 0
@@ -132,18 +119,28 @@ class InnerPopulation:
                     individual.bitstr, environment.weights[x, y])
                 fitness_sum += fitness
                 fitness_squared_sum += fitness ** 2  # Sum of squares for std deviation calculation
-                count += 1
+                fitness_count += 1
+                # Compare each individual to every other individual in this
+                # cell to figure out the genetic diversity there.
+                for i2 in range(self.shape[2]):
+                    other = self.pop[g, x, y, i2]
+                    if i != i2 and other.id != DEAD_ID:
+                        # Genetic similarity determined by hamming distance.
+                        hamming_dist = self.hamming_distance(individual, other)
+                        distance_sum += hamming_dist
+                        distance_squared_sum += hamming_dist ** 2
+                        distance_count += 1
                 self.fitness_values[i][0] = fitness  # Store fitness value in the temporary field
             self.pop[g, x, y, i].fitness = fitness
             self.pop[g, x, y, i].hiff = hiff
 
         # calc fitness diversity
-        fitness_diversity_result = self.evaluate_fitness_diversity(fitness_sum, fitness_squared_sum, count)
+        fitness_diversity_result = self.evaluate_fitness_diversity(fitness_sum, fitness_squared_sum, fitness_count)
         self.fitness_diversity[g] = fitness_diversity_result[0]
         self.pop_sum_fitness[g] = fitness_diversity_result[1]
 
         # calc genetic diversity
-        genetic_diversity_result = self.evaluate_genetic_diversity(g)
+        genetic_diversity_result = self.evaluate_genetic_diversity(distance_sum, distance_squared_sum, distance_count)
         self.genetic_diversity[g] = genetic_diversity_result[0]
         self.pop_sum_genetic[g] = genetic_diversity_result[1]
 
