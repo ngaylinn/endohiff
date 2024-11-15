@@ -29,16 +29,25 @@ def compute_substr_scores():
 SUBSTR_SCORES = compute_substr_scores()
 
 
-def render_env_map(env_data):
-    plt.figure(figsize=(6,8))
-    ax = plt.subplot(2, 1, 1)
-    ax.set(title='Min Fitness')
+def save_env_map(path, name, env_data):
+    plt.figure(figsize=(8,4.5))
     plt.imshow(env_data['min_fitness'].transpose())
     plt.clim(0.0, MAX_HIFF)
     plt.colorbar()
-    plt.xticks(np.arange(-0.5, ENVIRONMENT_SHAPE[0]), labels=[])
-    plt.yticks(np.arange(-0.5, ENVIRONMENT_SHAPE[1]), labels=[])
-    plt.grid(color=BORDER_COLOR)
+    plt.xlabel('Grid Column')
+    plt.ylabel('Grid Row')
+    labels = [
+        np.arange(0, ENVIRONMENT_SHAPE[0] + 1, 4),
+        np.arange(0, ENVIRONMENT_SHAPE[1] + 1, 4)
+    ]
+    plt.xticks(ticks=labels[0] - 0.5, labels=labels[0])
+    plt.yticks(ticks=labels[1] - 0.5, labels=labels[1])
+    plt.grid(color='k')
+
+    plt.suptitle(f'Environment Min Fitness ({name})')
+    plt.tight_layout()
+    plt.savefig(path / 'env_map_fitness.png', dpi=600)
+    plt.close()
 
     tile_size = (BITSTR_LEN // 2)
     scaled_shape = tile_size * np.array(ENVIRONMENT_SHAPE)
@@ -59,23 +68,23 @@ def render_env_map(env_data):
         env_map[x * tile_size:(x + 1) * tile_size,
                 y * tile_size:(y + 1) * tile_size] = map_tile
 
-    ax = plt.subplot(2, 1, 2)
-    ax.set(title='Substring Weights')
+    plt.figure(figsize=(8,4.5))
     plt.imshow(env_map.transpose())
     plt.clim(0.0, 1.0)
     plt.colorbar()
-    plt.xticks(np.arange(-0.5, scaled_shape[0], tile_size), labels=[])
-    plt.yticks(np.arange(-0.5, scaled_shape[1], tile_size), labels=[])
-    plt.grid(color=BORDER_COLOR)
+    plt.xlabel('Grid Column')
+    plt.ylabel('Grid Row')
+    ticks = [
+        labels[0] * tile_size - 0.5,
+        labels[1] * tile_size - 0.5]
+    plt.xticks(ticks=ticks[0], labels=labels[0])
+    plt.yticks(ticks=ticks[1], labels=labels[1])
+    plt.grid(color='k')
 
-
-def save_env_map(path, name, env_data):
-    render_env_map(env_data)
-    plt.suptitle(f'Environment map ({name})')
+    plt.suptitle(f'Environment Substring Weights ({name})')
     plt.tight_layout()
-    plt.savefig(path / 'env_map.png', dpi=600)
+    plt.savefig(path / 'env_map_weights.png', dpi=600)
     plt.close()
-
 
 def make_pop_map(pop_data):
     # Arrange the population data spatially.
@@ -101,9 +110,17 @@ def render_concentration_map(path, name, avg_scores):
     plt.figure(figsize=(8, 4.5))
     plt.imshow(avg_scores.T, cmap='viridis', interpolation='nearest')
     plt.colorbar()
-    plt.suptitle(f'HIFF density map ({name})')
+    plt.suptitle(f'Average HIFF score map ({name})')
     plt.xlabel('Grid Column')
     plt.ylabel('Grid Row')
+    labels = [
+        np.arange(0, ENVIRONMENT_SHAPE[0] + 1, 4),
+        np.arange(0, ENVIRONMENT_SHAPE[1] + 1, 4)
+    ]
+    plt.xticks(ticks=labels[0] - 0.5, labels=labels[0])
+    plt.yticks(ticks=labels[1] - 0.5, labels=labels[1])
+    plt.grid(color='k')
+    plt.tight_layout()
     plt.savefig(path / 'avg_hiff_map.png', dpi=600)
     plt.close()
 
@@ -124,6 +141,18 @@ def save_hiff_map(path, name, expt_data):
     render_pop_map(make_pop_map(pop_data))
     plt.suptitle(f'HIFF score map ({name})')
     plt.colorbar()
+    plt.xlabel('Grid Column')
+    plt.ylabel('Grid Row')
+    labels = [
+        np.arange(0, ENVIRONMENT_SHAPE[0] + 1, 4),
+        np.arange(0, ENVIRONMENT_SHAPE[1] + 1, 4)]
+    ticks = [
+        labels[0] * int(sqrt(CARRYING_CAPACITY)) - 0.5,
+        labels[1] * int(sqrt(CARRYING_CAPACITY)) - 0.5]
+    plt.xticks(ticks=ticks[0], labels=labels[0])
+    plt.yticks(ticks=ticks[1], labels=labels[1])
+    plt.grid(color='k')
+    plt.tight_layout()
     plt.savefig(path / 'hiff_map.png', dpi=600)
     plt.close()
 
@@ -222,17 +251,26 @@ def calculate_genetic_diversity(expt_data, final_generation):
 
 def render_genetic_diversity_map(path, name, genetic_diversity_map):
     plt.figure(figsize=(8, 4.5))
-    plt.imshow(genetic_diversity_map.T, cmap='viridis', interpolation='nearest')
+    plt.imshow(genetic_diversity_map.T, cmap=plt.get_cmap().with_extremes(under='black'), interpolation='nearest')
+    plt.clim(1, MAX_HIFF)
     plt.colorbar()
     plt.suptitle(f'Genetic Diversity Map ({name})')
     plt.xlabel('Grid Column')
     plt.ylabel('Grid Row')
+    labels = [
+        np.arange(0, ENVIRONMENT_SHAPE[0] + 1, 4),
+        np.arange(0, ENVIRONMENT_SHAPE[1] + 1, 4)
+    ]
+    plt.xticks(ticks=labels[0] - 0.5, labels=labels[0])
+    plt.yticks(ticks=labels[1] - 0.5, labels=labels[1])
+    plt.grid(color='k')
+    plt.tight_layout()
     plt.savefig(path / 'genetic_diversity_map.png', dpi=600)
     plt.close()
 
 
 def save_all_results():
-    num_artifacts = 4 * 6 * len(CONDITION_NAMES)
+    num_artifacts = 4 * 5 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     for crossover in [True, False]:
         for migration in [True, False]:
@@ -254,8 +292,8 @@ def save_all_results():
                         pl.col('generation') == INNER_GENERATIONS - 1
                     )
 
-                    save_fitness_map(path, name, expt_data)
-                    progress.update()
+                    # save_fitness_map(path, name, expt_data)
+                    # progress.update()
 
                     save_hiff_map(path, name, expt_data)
                     progress.update()
@@ -266,7 +304,7 @@ def save_all_results():
 
                     genetic_diversity_map = calculate_genetic_diversity(expt_data, FINAL_GENERATION)
                     render_genetic_diversity_map(path, name, genetic_diversity_map)
-                    progress.update()       
+                    progress.update()
 
                     # Load and render the environment where this experiment happened.
                     env_data = np.load(path / 'env.npz')
