@@ -252,7 +252,7 @@ def calculate_genetic_diversity(expt_data, final_generation):
 def render_genetic_diversity_map(path, name, genetic_diversity_map):
     plt.figure(figsize=(8, 4.5))
     plt.imshow(genetic_diversity_map.T, cmap=plt.get_cmap().with_extremes(under='black'), interpolation='nearest')
-    plt.clim(1, MAX_HIFF)
+    plt.clim(0.1, 50)
     plt.colorbar()
     plt.suptitle(f'Genetic Diversity Map ({name})')
     plt.xlabel('Grid Column')
