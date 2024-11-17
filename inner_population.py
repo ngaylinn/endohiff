@@ -333,7 +333,7 @@ class InnerPopulation:
 
 
     @ti.kernel
-    def populate_children(self, environment: ti.template(), g: int, crossover: ti.template()):
+    def populate_children(self, environment: ti.template(), g: int, crossover: bool):
         for x, y, i in ti.ndrange(*self.shape):
             parent = self.pop[g, x, y, i]
 
@@ -350,6 +350,8 @@ class InnerPopulation:
                 child = Individual()
                 if crossover:
                     child.bitstr = diverse_crossover(parent.bitstr, mate.bitstr) #CHANGED TO UNIFORM_CROSSOVER
+                else:
+                    child.bitstr = parent.bitstr
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
@@ -370,8 +372,7 @@ class InnerPopulation:
 
 
     def propagate(self, environment, generation, migrate, crossover):
-        # TODO: Experiment with different orders...   
-        if migrate:    
+        if migrate:
             self.migrate_overwriting(generation)
         self.refill_empty_spaces(generation)
         self.populate_children(environment, generation, crossover)
