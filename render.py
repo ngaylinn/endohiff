@@ -205,7 +205,7 @@ def calculate_genetic_diversity(expt_data, final_generation):
         2D numpy array of genetic diversity values for each cell.
     """
     # Filter for the final generation
-    expt_data_final_gen = expt_data.filter(pl.col('generation') == final_generation)
+    expt_data_final_gen = expt_data.filter(pl.col('Generation') == final_generation)
     
     # Extract and reshape bitstring data
     bitstr_data = expt_data_final_gen['bitstr'].to_numpy()
@@ -289,7 +289,7 @@ def save_all_results():
                     # Restrict to the last generation and render maps of the final fitnes
                     # and HIFF scores.
                     expt_data = expt_data.filter(
-                        pl.col('generation') == INNER_GENERATIONS - 1
+                        pl.col('Generation') == INNER_GENERATIONS - 1
                     )
 
                     # save_fitness_map(path, name, expt_data)

@@ -81,6 +81,9 @@ def chart_hiff_dist(path, name, expt_data):
     grid.figure.supylabel('Density')
     grid.figure.savefig(path / 'hiff_dist.png', dpi=600)
     plt.close()
+    # Restore the default colormap so we don't alter other charts generated
+    # after this one.
+    plt.set_cmap('viridis')
 
 
 def chart_population_size(path, name, expt_data):
