@@ -6,8 +6,7 @@ from chart import chart_hiff_dist
 from environment import Environment, make_baym
 from evolve import evolve
 from inner_population import InnerPopulation
-from render import save_env_map, save_hiff_map
-
+from render import save_env_map, save_hiff_map, calculate_genetic_diversity, render_genetic_diversity_map
 
 def make_stretched():
     # Ramp up and down like Baym, but make the "step" that got the highest
@@ -59,6 +58,9 @@ def baym_variants():
 
         save_env_map(path, name, env.to_numpy())
         save_hiff_map(path, name, last_gen)
+        genetic_diversity_map = calculate_genetic_diversity(
+            inner_log, INNER_GENERATIONS - 1)
+        render_genetic_diversity_map(path, name, genetic_diversity_map)
         try:
             chart_hiff_dist(path, name, inner_log)
         except ValueError:
