@@ -31,9 +31,9 @@ def save_hiff_diagram():
         'Bistrings (00000000 to 11111111)': np.arange(NUM_VALUES),
         'HIFF Score': hiffs.to_numpy()
     })
-    sns.catplot(
+    sns.relplot(
         data=df, x='Bistrings (00000000 to 11111111)',
-        y='HIFF Score', kind='bar', aspect=3
+        y='HIFF Score', kind='line', aspect=3
     ).set(xticklabels=[]).tick_params(bottom=False)
     plt.savefig('output/hiff.png', dpi=600)
 
