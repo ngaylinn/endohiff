@@ -324,8 +324,14 @@ class InnerPopulation:
                     # at this location, or do tournament selection to pick a
                     # more fit individual.
                     if self.random_refill:
-                        new_index = ti.random(int) %  CARRYING_CAPACITY
-                        individual = self.pop[g, x, y, new_index]
+                        # If you pick a DEAD individual, try a few more times.
+                        # This makes it significantly easier for a migrant to
+                        # colonize an empty cell.
+                        for _ in range(4):
+                            new_index = ti.random(int) %  CARRYING_CAPACITY
+                            individual = self.pop[g, x, y, new_index]
+                            if individual.id != DEAD_ID:
+                                break
                     else:
                         individual = tournament_selection(self.pop, g, x, y)
 

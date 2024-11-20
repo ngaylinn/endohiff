@@ -18,6 +18,10 @@ python3 ./chart_across_experiments.py
 echo "Rendering visualizations of results..."
 python3 ./render.py
 
+echo "Running supplemental experiments..."
+python3 ./baym_variants.py
+python3 ./selection_pressure.py
+
 echo "Generating supplemental figures..."
 python3 ./supplemental_figures.py
 
