@@ -70,7 +70,7 @@ def run_experiments():
 
                     print_summary(name, inner_log, migration, crossover)
                     # Store the fitness values for each generation
-                    experiment_results[name][condition_key][run_num] = inner_log.to_pandas().to_dict()
+                    # experiment_results[name][condition_key][run_num] = inner_log.to_pandas().to_dict()
 
     np.save(OUTPUT_PATH / 'experiment_results.npy', experiment_results)
 

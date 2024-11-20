@@ -188,7 +188,7 @@ def chart_fitness_diversity(path, name, df):
 
     # fig = sns.relplot(data=df, x='Generation', y='Fitness Diversity', kind='line')
     plt.ylim=(0, 50)  # Set y-axis limits from 0 to 50 - consistent for all environments
-    fig.set(title=f'Fitness Diversity ({name})')
+    plt.title=f'Fitness Diversity ({name})'
     fig.savefig(path / 'fitness_diversity.png', dpi=600)
     plt.close()
 
@@ -196,7 +196,7 @@ def chart_genetic_diversity(path, name, df):
     fig = plot_mean_and_bootstrapped_ci_over_time(df, 'Genetic Diversity', x_label='Generation', y_label='Genetic Diversity', y_limit=(0, 50), title=f'Genetic Diversity ({name})')
     # fig = sns.relplot(data=df, x='Generation', y='Genetic Diversity', kind='line')
     plt.ylim=(0, 50)  # Set y-axis limits from 0 to 50 - consistent for all environments
-    fig.set(title=f'Genetic Diversity ({name})')
+    plt.title=f'Genetic Diversity ({name})'
     fig.savefig(path / 'genetic_diversity.png', dpi=600)
     plt.close()
 
