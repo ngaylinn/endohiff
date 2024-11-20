@@ -1,18 +1,42 @@
 from pathlib import Path
 import warnings
-
+import numpy as np
 import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 from tqdm import trange
+from scipy.stats import bootstrap
 
 from constants import INNER_GENERATIONS, MAX_HIFF, MAX_POPULATION_SIZE, MIN_HIFF, OUTPUT_PATH
 # from run_experiments import CONDITION_NAMES
 from environment import ENVIRONMENTS
 
+NUM_RUNS = 20
+
 
 # Making ridgeplots with Seaborn generates lots of these warnings.
 warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
+
+def plot_mean_and_bootstrapped_ci_over_time(df, value_col, x_label="Generation", y_label="Value", y_limit=None, title=""):
+    fig, ax = plt.subplots()  # generate figure and axes
+    generations = df['Generation'].unique().to_list()
+    mean_values = df.group_by('Generation').agg(pl.col(value_col).mean())
+    
+    bootstrap_ci = np.zeros((2, len(generations)))
+    for i, gen in enumerate(generations):
+        res = bootstrap((df.filter(pl.col('Generation') == gen)[value_col].to_numpy(),), np.mean, confidence_level=0.95, n_resamples=1000)
+        bootstrap_ci[:, i] = res.confidence_interval
+    
+    ax.plot(generations, mean_values[value_col], label=value_col)  # plot the mean value over time
+    ax.fill_between(generations, bootstrap_ci[0, :], bootstrap_ci[1, :], alpha=0.3)  # plot and fill the confidence interval for the value over time
+    ax.set_xlabel(x_label)  # add axes labels
+    ax.set_ylabel(y_label)
+    if y_limit:
+        ax.set_ylim(y_limit[0], y_limit[1])
+    plt.legend(loc='best')  # add legend
+    # plt.title(title)
+    # plt.savefig(title.replace(" ", "_") + ".png", dpi=600)  # Save the figure
+    return fig
 
 def chart_fitness(path, name, expt_data):
     expt_data = expt_data.group_by('generation').agg(pl.col('fitness').max())
@@ -160,15 +184,18 @@ def chart_survival(path, name, expt_data):
 
 
 def chart_fitness_diversity(path, name, df):
-    fig = sns.relplot(data=df, x='Generation', y='Fitness Diversity', kind='line')
-    fig.set(ylim=(0, 50))  # Set y-axis limits from 0 to 50 - consistent for all environments
+    fig = plot_mean_and_bootstrapped_ci_over_time(df, 'Fitness Diversity', x_label='Generation', y_label='Fitness Diversity', y_limit=(0, 50), title=f'Fitness Diversity ({name})')
+
+    # fig = sns.relplot(data=df, x='Generation', y='Fitness Diversity', kind='line')
+    plt.ylim=(0, 50)  # Set y-axis limits from 0 to 50 - consistent for all environments
     fig.set(title=f'Fitness Diversity ({name})')
     fig.savefig(path / 'fitness_diversity.png', dpi=600)
     plt.close()
 
 def chart_genetic_diversity(path, name, df):
-    fig = sns.relplot(data=df, x='Generation', y='Genetic Diversity', kind='line')
-    fig.set(ylim=(0, 50))  # Set y-axis limits from 0 to 50 - consistent for all environments
+    fig = plot_mean_and_bootstrapped_ci_over_time(df, 'Genetic Diversity', x_label='Generation', y_label='Genetic Diversity', y_limit=(0, 50), title=f'Genetic Diversity ({name})')
+    # fig = sns.relplot(data=df, x='Generation', y='Genetic Diversity', kind='line')
+    plt.ylim=(0, 50)  # Set y-axis limits from 0 to 50 - consistent for all environments
     fig.set(title=f'Genetic Diversity ({name})')
     fig.savefig(path / 'genetic_diversity.png', dpi=600)
     plt.close()
@@ -187,36 +214,55 @@ def chart_all_results():
             for env in ENVIRONMENTS.keys():
                 name = env
                 path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
-                try:
-                    expt_data = pl.read_parquet(path / 'inner_log.parquet')
 
-                    whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
+                frames = []
+                whole_pop_metrics_frames = []
 
-                    # chart_fitness(path, name, expt_data)
-                    # progress.update()
+                for run_num in range(NUM_RUNS):
 
-                    # chart_hiff_max(path, name, expt_data)
-                    # progress.update()
+                    try:
+                        inner_log_path = path / f'inner_log_run_{run_num}.parquet'
+                        whole_pop_metrics_path = path / f'whole_pop_metrics_run_{run_num}.parquet'
 
-                    # chart_hiff_sum(path, name, expt_data)
-                    # progress.update()
+                        if inner_log_path.exists():
+                            frames.append(pl.read_parquet(inner_log_path))
+                        if whole_pop_metrics_path.exists():
+                            whole_pop_metrics_frames.append(pl.read_parquet(whole_pop_metrics_path))
+                    except Exception as e:
+                        print(f"Could not process {inner_log_path} or {whole_pop_metrics_path}: {e}")
 
+                if frames:
+                    expt_data = pl.concat(frames)
                     chart_hiff_dist(path, name, expt_data)
                     progress.update()
 
-                    # chart_population_size(path, name, expt_data)
-                    # progress.update()
-
-                    # chart_survival(path, name, expt_data)
-                    # progress.update()
+                if whole_pop_metrics_frames:
+                    whole_pop_metrics = pl.concat(whole_pop_metrics_frames)
 
                     chart_fitness_diversity(path, name, whole_pop_metrics)
                     progress.update()
 
                     chart_genetic_diversity(path, name, whole_pop_metrics)
-                    progress.update()
-                except Exception as e:
-                    print(f"Could not process {path}: {e}")
+                    progress.update()           
+
+
+                # chart_fitness(path, name, expt_data)
+                # progress.update()
+
+                # chart_hiff_max(path, name, expt_data)
+                # progress.update()
+
+                # chart_hiff_sum(path, name, expt_data)
+                # progress.update()
+
+
+
+                # chart_population_size(path, name, expt_data)
+                # progress.update()
+
+                # chart_survival(path, name, expt_data)
+                # progress.update()
+
 
 
 if __name__ == '__main__':

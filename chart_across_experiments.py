@@ -1,28 +1,54 @@
 from pathlib import Path
+import numpy as np
 import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 from tqdm import trange
+from scipy.stats import bootstrap
 
 from constants import INNER_GENERATIONS, OUTPUT_PATH, MAX_HIFF
 from environment import ENVIRONMENTS
 
-def chart_across_experiments():
-    frames = []
+NUM_RUNS = 10 #bringing this down for memory problems
 
-    for crossover in [True, False]:
-        for migration in [True, False]:
-            for env in ENVIRONMENTS.keys():
+def plot_mean_and_bootstrapped_ci_over_time(experiment_results, name, x_label="Generation", y_label="Fitness", y_limit=None):
+    fig, ax = plt.subplots()  # generate figure and axes
+
+    this_input_data = experiment_results[name]
+    total_generations = this_input_data.shape[1]
+
+    bootstrap_ci = np.zeros((2, total_generations))
+    for this_gen in range(total_generations):
+        res = bootstrap((this_input_data[:, this_gen],), np.mean, confidence_level=0.95, n_resamples=100)
+        bootstrap_ci[:, this_gen] = res.confidence_interval
+
+    ax.plot(np.arange(total_generations), np.mean(this_input_data, axis=0), label=name)  # plot the fitness over time
+    ax.fill_between(np.arange(total_generations), bootstrap_ci[0, :], bootstrap_ci[1, :], alpha=0.3)  # plot and fill the confidence interval for fitness over time
+    ax.set_xlabel(x_label)  # add axes labels
+    ax.set_ylabel(y_label)
+    if y_limit:
+        ax.set_ylim(y_limit[0], y_limit[1])
+    plt.legend(loc='best')  # add legend
+
+    plt.show()
+
+def chart_across_experiments():
+    experiment_results = np.load(OUTPUT_PATH / 'experiment_results.npy', allow_pickle=True).item()
+
+    frames = []
+    for env in ENVIRONMENTS.keys():
+        for crossover in [True, False]:
+            for migration in [True, False]:
                 path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
-                if (path / 'inner_log.parquet').exists():
-                    frames.append(pl.read_parquet(
-                        path / 'inner_log.parquet'
-                    ).with_columns(
-                        environment=pl.lit(env),
-                        variant=pl.lit(f'migration_{migration}_crossover_{crossover}'),
-                        crossover=pl.lit(crossover),
-                        migration=pl.lit(migration)
-                    ))
+                for run_num in range(NUM_RUNS):
+                    log_file = path / f'inner_log_run_{run_num}.parquet'
+                    if log_file.exists():
+                        frames.append(pl.read_parquet(log_file).with_columns(
+                            environment=pl.lit(env),
+                            variant=pl.lit(f'migration_{migration}_crossover_{crossover}'),
+                            crossover=pl.lit(crossover),
+                            migration=pl.lit(migration)
+                        ))
 
     all_data = pl.concat(frames)
 
@@ -37,6 +63,9 @@ def chart_across_experiments():
                 variant_path.mkdir(parents=True, exist_ok=True)
 
                 name = f'migration_{migration}_crossover_{crossover}'
+                condition_key = f'{env}_migration_{migration}_crossover_{crossover}'
+
+                plot_mean_and_bootstrapped_ci_over_time(experiment_results, condition_key, x_label="Generation", y_label="Fitness")
 
                 variant_data = all_data.filter(
                     # Looking only at living individuals...
@@ -46,10 +75,8 @@ def chart_across_experiments():
                     # In the last generation only...
                     (pl.col('Generation') == INNER_GENERATIONS - 1)
                 ).group_by(
-                    # For all cells across all generations...
                     'environment', 'Generation', 'x', 'y', maintain_order=True
                 ).agg(
-                    # Find the mean hiff score for individuals in this cell.
                     pl.col('hiff').mean().alias('Mean Hiff')
                 )
 
@@ -65,19 +92,15 @@ def chart_across_experiments():
                     plt.close()
                 progress.update()
 
+    # Plot across environments
     for env in ENVIRONMENTS.keys():
         env_data = all_data.filter(
-            # Looking only at living individuals...
             (pl.col('id') > 0) &
-            # From this environment...
             (pl.col('environment') == env) &
-            # In the last generation only...
             (pl.col('Generation') == INNER_GENERATIONS - 1)
         ).group_by(
-            # For all cells across all generations...
             'variant', 'Generation', 'x', 'y', maintain_order=True
         ).agg(
-            # Find the mean hiff score for individuals in this cell.
             pl.col('hiff').mean().alias('Mean Hiff')
         )
 
