@@ -30,7 +30,7 @@ DEAD_ID = 0
 
 @ti.data_oriented
 class InnerPopulation:
-    def __init__(self): 
+    def __init__(self):
         self.refill_rate = REFILL_RATE
         self.random_refill = True
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
@@ -47,8 +47,6 @@ class InnerPopulation:
         self.fitness_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.genetic_diversity = ti.field(dtype=ti.f32, shape=(INNER_GENERATIONS,))
         self.spatial_genetic_diversity = ti.field(dtype=ti.f32, shape=ENVIRONMENT_SHAPE) #new for genetic diversity
-
-
 
     @ti.func
     def get_next_id(self, x, y, i):
@@ -111,7 +109,7 @@ class InnerPopulation:
         distance_count = 0
 
         for x, y, i in ti.ndrange(*self.shape):
-            fitness, hiff = 0.0, 0
+            fitness, hiff = ti.cast(0.0, ti.float32), ti.cast(0, ti.uint32)
             # Only evaluate fitness of individuals that are alive.
             individual = self.pop[g, x, y, i]
             if individual.id != DEAD_ID:

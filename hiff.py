@@ -6,8 +6,8 @@ from constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE, NUM_WEIGHTS
 def weighted_hiff(bitstr, weights):
     # The one-bit substrings are "freebies" and automatically count towards the
     # hiff score. Don't use weights for these, since that would be pointless.
-    hiff = BITSTR_LEN
-    fitness = ti.cast(BITSTR_LEN, float)
+    hiff = ti.cast(BITSTR_LEN, ti.uint32)
+    fitness = ti.cast(BITSTR_LEN, ti.float32)
 
     # For all the powers of two up to BITSTR_LEN, look at all the substrings of
     # that size. We start with length 2, since we handled length 1 above.
