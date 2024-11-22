@@ -58,11 +58,23 @@ class InnerPopulation:
 
     @ti.kernel
     def randomize(self):
+        # Randomize the population.
         for x, y, i in ti.ndrange(*self.shape):
             self.pop[0, x, y, i] = Individual(
                 bitstr=ti.cast(ti.random(int), BITSTR_DTYPE),
                 id=self.get_next_id(x, y, i), parent=0, fitness=0.0, hiff=0)
+
+        # Keep assigning new ids instead of reusing them across experiments.
         self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
+
+        # Reset all the metrics we're tracking to 0 for a new experiment.
+        self.fitness_values.fill(0.0)
+        self.pop_diversity.fill(0.0)
+        self.pop_sum_fitness.fill(0.0)
+        self.pop_sum_genetic.fill(0.0)
+        self.fitness_diversity.fill(0.0)
+        self.genetic_diversity.fill(0.0)
+        self.spatial_genetic_diversity.fill(0.0)
 
     @ti.func
     def hamming_distance(self, individual1: ti.template(), individual2: ti.template()) -> ti.i32:
