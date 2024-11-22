@@ -14,7 +14,6 @@ index = pl.DataFrame({
     'Generation': np.arange(g).repeat(w * h * c),
     'x': np.tile(np.arange(w).repeat(h * c), g),
     'y': np.tile(np.arange(h).repeat(c), g * w),
-    'diversity': np.arange(g).repeat(w * h * c),
 })
 
 # init. whole-pop metric df
@@ -26,13 +25,29 @@ whole_pop_metrics_df = pl.DataFrame({
 })
 
 
+def outer_fitness(inner_log):
+    return float(inner_log.filter(
+        # Look only at live individuals in the last generation.
+        (pl.col('id') > 0) &
+        (pl.col('Generation') == INNER_GENERATIONS - 1)
+    # Find the average hiff score in every location of the environment.
+    ).group_by(
+        'x', 'y'
+    ).agg(
+        pl.col('hiff').mean()
+    # Use the median of those scores as a metric for how well the inner
+    # population was able to evolve in these conditions. This rewards
+    # populations that produce higher concentrations of high hiff scores in
+    # larger areas of the environment.
+    )['hiff'].median())
+
+
 def evolve(inner_population, environment, migration, crossover):
     global whole_pop_metrics_df
 
     inner_population.randomize()
     fitness_diversity_list = []
     genetic_diversity_list = []
-    bitstrings_list = []  # List to store bitstrings of all individuals
     for inner_generation in range(INNER_GENERATIONS):
         inner_population.evaluate(environment, inner_generation)
         # TODO: add same stuff for other whole-population metrics
@@ -66,6 +81,6 @@ def evolve(inner_population, environment, migration, crossover):
     }).hstack(
         index
     )
-    return inner_log, whole_pop_metrics_df
+    return inner_log, whole_pop_metrics_df, outer_fitness(inner_log)
 
 

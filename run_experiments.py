@@ -47,7 +47,8 @@ def run_experiments():
 
                 inner_population = InnerPopulation()
                 environment = make_environment()
-                inner_log, whole_pop_metrics = evolve(inner_population, environment, migration, crossover)
+                inner_log, whole_pop_metrics, outer_fitness = evolve(
+                    inner_population, environment, migration, crossover)
 
                 inner_log.write_parquet(path / 'inner_log.parquet')
                 whole_pop_metrics.write_parquet(path / 'whole_pop_metrics.parquet')

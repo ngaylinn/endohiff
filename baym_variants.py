@@ -51,7 +51,7 @@ def baym_variants():
 
         env = make_env()
         inner_population = InnerPopulation()
-        inner_log, _ = evolve(inner_population, env, True, True)
+        inner_log, _, _ = evolve(inner_population, env, True, True)
         last_gen = inner_log.filter(
             pl.col('Generation') == INNER_GENERATIONS - 1
         )
