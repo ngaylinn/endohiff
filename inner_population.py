@@ -36,7 +36,7 @@ class InnerPopulation:
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
         self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
         self.next_id = ti.field(dtype=ti.uint32, shape=())
-        self.next_id[None] = 1
+        self.next_id[None] = ti.cast(1, ti.uint32)
         self.fitness_values = ti.Vector.field(1, dtype=ti.float32, shape=(CARRYING_CAPACITY,))  # Temporary field for fitness values
 
         # holding diversity over generations
