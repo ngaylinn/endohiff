@@ -26,7 +26,7 @@ whole_pop_metrics_df = pl.DataFrame({
 
 
 def outer_fitness(inner_log):
-    return float(inner_log.filter(
+    score = inner_log.filter(
         # Look only at live individuals in the last generation.
         (pl.col('id') > 0) &
         (pl.col('Generation') == INNER_GENERATIONS - 1)
@@ -39,7 +39,8 @@ def outer_fitness(inner_log):
     # population was able to evolve in these conditions. This rewards
     # populations that produce higher concentrations of high hiff scores in
     # larger areas of the environment.
-    )['hiff'].median())
+    )['hiff'].median()
+    return 0.0 if score is None else float(score)
 
 
 def evolve(inner_population, environment, migration, crossover):
