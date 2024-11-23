@@ -1,95 +1,82 @@
+from itertools import combinations
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import polars as pl
+from scipy.stats import mannwhitneyu
 import seaborn as sns
 from tqdm import trange
 
-from constants import INNER_GENERATIONS, OUTPUT_PATH, MAX_HIFF
+from constants import OUTPUT_PATH, MAX_HIFF
 from environment import ENVIRONMENTS
 
+
+def compare_hiff_distributions(file, data, column):
+    conditions = data[column].unique()
+    max_len = max(map(len, conditions))
+    for (cond_a, cond_b) in combinations(conditions, 2):
+        data_a = data.filter(pl.col(column) == cond_a)['Mean Hiff']
+        data_b = data.filter(pl.col(column) == cond_b)['Mean Hiff']
+        _, p_less = mannwhitneyu(data_a, data_b, alternative='less')
+        _, p_greater = mannwhitneyu(data_a, data_b, alternative='greater')
+        if p_less > p_greater:
+            template = f'{{0:>{max_len}}} > {{1:<{max_len}}}'
+            print(template.format(cond_a, cond_b), f'p = {p_greater}', file=file)
+        else:
+            template = f'{{0:>{max_len}}} < {{1:<{max_len}}}'
+            print(template.format(cond_a, cond_b), f'p = {p_less}', file=file)
+
+
 def chart_across_experiments():
-    frames = []
+    # Read the final hiff score data from all the experiments.
+    all_data = pl.read_parquet('output/*/*/hiff_scores.parquet')
 
-    for crossover in [True, False]:
-        for migration in [True, False]:
-            for env in ENVIRONMENTS.keys():
-                path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
-                if (path / 'inner_log.parquet').exists():
-                    frames.append(pl.read_parquet(
-                        path / 'inner_log.parquet'
-                    ).with_columns(
-                        environment=pl.lit(env),
-                        variant=pl.lit(f'migration_{migration}_crossover_{crossover}'),
-                        crossover=pl.lit(crossover),
-                        migration=pl.lit(migration)
-                    ))
+    variants = all_data['variant'].unique()
+    environments = all_data['environment'].unique()
 
-    all_data = pl.concat(frames)
-
-    num_artifacts = 4 * 2 * len(ENVIRONMENTS)
+    num_artifacts = len(variants) + len(environments)
     progress = trange(num_artifacts)
 
-    # Iterate through all the unique combinations to plot
-    for crossover in [True, False]:
-        for migration in [True, False]:
-            for env in ENVIRONMENTS.keys():
-                variant_path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}'
-                variant_path.mkdir(parents=True, exist_ok=True)
+    for variant_name in variants:
+        variant_path = OUTPUT_PATH / variant_name
+        variant_path.mkdir(parents=True, exist_ok=True)
 
-                name = f'migration_{migration}_crossover_{crossover}'
-
-                variant_data = all_data.filter(
-                    # Looking only at living individuals...
-                    (pl.col('id') > 0) &
-                    # From this algorithm variant...
-                    (pl.col('variant') == name) &
-                    # In the last generation only...
-                    (pl.col('Generation') == INNER_GENERATIONS - 1)
-                ).group_by(
-                    # For all cells across all generations...
-                    'environment', 'Generation', 'x', 'y', maintain_order=True
-                ).agg(
-                    # Find the mean hiff score for individuals in this cell.
-                    pl.col('hiff').mean().alias('Mean Hiff')
-                )
-
-                if len(variant_data) > 0:
-                    fig = sns.displot(
-                        variant_data.to_pandas(), x='Mean Hiff', kind='kde',
-                        hue='environment', aspect=1.33)
-                    plt.xlim(200, MAX_HIFF)
-                    sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.8, 0.8))
-                    fig.set(title=f'Population HIFF Distribution ({name})')
-                    fig.savefig(variant_path / f'hiff_dist.png', dpi=600)
-                    plt.tight_layout()
-                    plt.close()
-                progress.update()
-
-    for env in ENVIRONMENTS.keys():
-        env_data = all_data.filter(
-            # Looking only at living individuals...
-            (pl.col('id') > 0) &
-            # From this environment...
-            (pl.col('environment') == env) &
-            # In the last generation only...
-            (pl.col('Generation') == INNER_GENERATIONS - 1)
-        ).group_by(
-            # For all cells across all generations...
-            'variant', 'Generation', 'x', 'y', maintain_order=True
-        ).agg(
-            # Find the mean hiff score for individuals in this cell.
-            pl.col('hiff').mean().alias('Mean Hiff')
+        hiff_scores = all_data.filter(
+            pl.col('variant') == variant_name
+        ).select(
+            'environment', 'Mean Hiff'
         )
+        with open(variant_path / 'mannwhitneyu.txt', 'w') as file:
+            compare_hiff_distributions(file, hiff_scores, 'environment')
 
-        if len(env_data) > 0:
+        if len(hiff_scores) > 0:
             fig = sns.displot(
-                env_data.to_pandas(), x='Mean Hiff', kind='kde',
+                hiff_scores, x='Mean Hiff', kind='kde',
+                hue='environment', aspect=1.33)
+            plt.xlim(200, MAX_HIFF)
+            sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.8, 0.8))
+            fig.set(title=f'Population HIFF Distribution ({variant_name})')
+            fig.savefig(variant_path / f'hiff_dist.png', dpi=600)
+            plt.close()
+        progress.update()
+
+    for env_name in environments:
+        hiff_scores = all_data.filter(
+            pl.col('environment') == env_name
+        ).select(
+            'variant', 'Mean Hiff'
+        )
+        with open(OUTPUT_PATH / f'mannwhitneyu_{env_name}.txt', 'w') as file:
+            compare_hiff_distributions(file, hiff_scores, 'variant')
+
+        if len(hiff_scores) > 0:
+            fig = sns.displot(
+                hiff_scores, x='Mean Hiff', kind='kde',
                 hue='variant', aspect=1.33)
             plt.xlim(200, MAX_HIFF)
             sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.60, 0.8))
-            fig.set(title=f'Population HIFF Distribution ({env})')
-            fig.savefig(OUTPUT_PATH / f'hiff_dist_{env}.png', dpi=600)
-            plt.tight_layout()
+            fig.set(title=f'Population HIFF Distribution ({env_name})')
+            fig.savefig(OUTPUT_PATH / f'hiff_dist_{env_name}.png', dpi=600)
             plt.close()
         progress.update()
 

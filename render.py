@@ -280,29 +280,28 @@ def save_all_results():
                 FINAL_GENERATION = INNER_GENERATIONS - 1
 
                 try:
-                    expt_data = pl.read_parquet(path / 'inner_log.parquet')
-
                     # Save an animation of fitness over time.
-                    save_hiff_animation(path, expt_data)
+                    best_trial = pl.read_parquet(path / 'best_trial.parquet')
+                    save_hiff_animation(path, best_trial)
                     progress.update()
 
                     # Restrict to the last generation and render maps of the final fitnes
                     # and HIFF scores.
-                    expt_data = expt_data.filter(
+                    best_trial = best_trial.filter(
                         pl.col('Generation') == INNER_GENERATIONS - 1
                     )
 
-                    # save_fitness_map(path, name, expt_data)
+                    # save_fitness_map(path, name, best_trial)
                     # progress.update()
 
-                    save_hiff_map(path, name, expt_data)
+                    save_hiff_map(path, name, best_trial)
                     progress.update()
 
-                    save_avg_hiff_map(path, name, expt_data)
+                    save_avg_hiff_map(path, name, best_trial)
                     progress.update()
 
 
-                    genetic_diversity_map = calculate_genetic_diversity(expt_data, FINAL_GENERATION)
+                    genetic_diversity_map = calculate_genetic_diversity(best_trial, FINAL_GENERATION)
                     render_genetic_diversity_map(path, name, genetic_diversity_map)
                     progress.update()
 

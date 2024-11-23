@@ -27,3 +27,7 @@ CROSSOVER_RATE = 0.5 #for diverse_crossover, frequency of crossover
 REFILL_RATE = 1.0
 
 OUTPUT_PATH = Path('output')
+
+# How many times to run each experiment to improve statistical significance /
+# demonstrate results are reliable. Results with be averaged.
+NUM_REPETITIONS = 5
