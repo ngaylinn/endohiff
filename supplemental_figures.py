@@ -15,7 +15,7 @@ from hiff import weighted_hiff
 
 ti.init(ti.cuda)
 
-hiffs = ti.field(ti.i32, shape=NUM_VALUES)
+hiffs = ti.field(ti.u32, shape=NUM_VALUES)
 
 
 @ti.kernel
