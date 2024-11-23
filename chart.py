@@ -179,7 +179,7 @@ def chart_all_results():
     # TODO: Consider using styles from Aquarel project?
     sns.set_theme()
 
-    num_artifacts = 4 * 3 * len(CONDITION_NAMES)
+    num_artifacts = 2 * 2 * 1 * len(CONDITION_NAMES)
     progress = trange(num_artifacts)
     # Iterate through all the unique combinations to plot
     for crossover in [True, False]:
@@ -188,9 +188,11 @@ def chart_all_results():
                 name = env
                 path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
                 try:
-                    expt_data = pl.read_parquet(path / 'inner_log.parquet')
+                    # Summarize results from a single experimental run (the
+                    # best one for this condition).
+                    expt_data = pl.read_parquet(path / 'best_trial.parquet')
 
-                    whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
+                    # whole_pop_metrics = pl.read_parquet(path / 'whole_pop_metrics.parquet')
 
                     # chart_fitness(path, name, expt_data)
                     # progress.update()
@@ -210,11 +212,11 @@ def chart_all_results():
                     # chart_survival(path, name, expt_data)
                     # progress.update()
 
-                    chart_fitness_diversity(path, name, whole_pop_metrics)
-                    progress.update()
+                    # chart_fitness_diversity(path, name, whole_pop_metrics)
+                    # progress.update()
 
-                    chart_genetic_diversity(path, name, whole_pop_metrics)
-                    progress.update()
+                    # chart_genetic_diversity(path, name, whole_pop_metrics)
+                    # progress.update()
                 except Exception as e:
                     print(f"Could not process {path}: {e}")
 
