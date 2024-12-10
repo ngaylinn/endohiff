@@ -1,15 +1,22 @@
-import matplotlib.pyplot as plt
+"""Supplemental experiment comparing variations of the Baym environment.
+"""
+
 import numpy as np
 import polars as pl
-import seaborn as sns
-from chart_across_experiments import compare_hiff_distributions
+import taichi as ti
 
-from constants import ENVIRONMENT_SHAPE, INNER_GENERATIONS, OUTPUT_PATH, MAX_HIFF
+from constants import ENVIRONMENT_SHAPE, INNER_GENERATIONS, OUTPUT_PATH
 from chart import chart_hiff_dist
+from chart_across_experiments import chart_hiff_comparison, compare_hiff_distributions
 from environment import Environment, make_baym
 from evolve import evolve
 from inner_population import InnerPopulation
-from render import save_env_map, save_hiff_map, calculate_genetic_diversity, render_genetic_diversity_map
+from render import save_env_map, save_hiff_map
+
+# We store weights in a vector, which Taichi warns could cause slow compile
+# times. In practice, this doesn't seem like a problem, so disable the warning.
+ti.init(ti.cuda, unrolling_limit=0)
+
 
 def make_stretched():
     # Ramp up and down like Baym, but make the "step" that got the highest
@@ -54,19 +61,18 @@ def baym_variants():
         path = OUTPUT_PATH / 'baym_variants' / name
         path.mkdir(exist_ok=True, parents=True)
 
+        # Actually run the experiment and capture the logs.
         env = make_env()
         inner_population = InnerPopulation()
-        inner_log, _, _ = evolve(inner_population, env, True, True)
+        inner_log, _ = evolve(inner_population, env, True, True)
         last_gen = inner_log.filter(
             pl.col('Generation') == INNER_GENERATIONS - 1
         )
         logs[name] = inner_log
 
+        # Generate visualizations for each experiment.
         save_env_map(path, name, env.to_numpy())
         save_hiff_map(path, name, last_gen)
-        genetic_diversity_map = calculate_genetic_diversity(
-            inner_log, INNER_GENERATIONS - 1)
-        render_genetic_diversity_map(path, name, genetic_diversity_map)
         try:
             chart_hiff_dist(path, name, inner_log)
         except ValueError:
@@ -74,8 +80,8 @@ def baym_variants():
             # chart fails, but that's okay. Just skip that visualization.
             pass
 
-    # Compare the hiff distributions for the baym and stretched variants head
-    # to head (we leave out the no_ramp variant, since the population dies out)
+    # Merge the logs from the baym and stretched conditions so we can compare
+    # them head-to-head.
     head_to_head = pl.concat((
         logs['baym'].with_columns(environment=pl.lit('baym')),
         logs['stretched'].with_columns(environment=pl.lit('stretched'))
@@ -88,15 +94,13 @@ def baym_variants():
         pl.col('hiff').mean().alias('Mean Hiff')
     )
 
-    fig = sns.displot(
-        head_to_head, x='Mean Hiff', kind='kde', hue='environment', aspect=1.33)
-    plt.xlim(200, MAX_HIFF)
-    sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.60, 0.8))
-    fig.set(title=f'Population HIFF Distribution (baym variants)')
-    fig.savefig(OUTPUT_PATH / 'baym_variants'/ f'hiff_dist.png', dpi=600)
-    plt.close()
+    # Generate charts and calculate statistical significance comparing results
+    # across these conditions.
+    chart_hiff_comparison(
+        head_to_head, 'environment', 'baym variants',
+        OUTPUT_PATH / 'baym_variants'/ f'hiff_dist.png')
     with open(OUTPUT_PATH / 'baym_variants' / 'mannwitneyu.txt', 'w') as file:
-        compare_hiff_distributions(file, head_to_head, 'environment')
+        compare_hiff_distributions(head_to_head, 'environment', file)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,10 @@
+"""Compute HIFF or some variation of HIFF with different substring weights.
+"""
+
 import taichi as ti
 
 from constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE, NUM_WEIGHTS
+
 
 @ti.func
 def weighted_hiff(bitstr, weights):
@@ -37,6 +41,11 @@ def weighted_hiff(bitstr, weights):
     return fitness, hiff
 
 
+@ti.func
+def hiff(bitstr):
+    return weighted_hiff(bitstr, ti.Vector([1.0] * NUM_WEIGHTS))
+
+
 @ti.kernel
 def hiff_demo(bitstr: BITSTR_DTYPE, weights: ti.template()):
     ti.loop_config(serialize=True)
@@ -44,6 +53,7 @@ def hiff_demo(bitstr: BITSTR_DTYPE, weights: ti.template()):
     print(f'Fitness: {fitness:0.2f}; HIFF: {hiff}')
 
 
+# A demo to compute the weighted hiff score of some bit string.
 if __name__ == '__main__':
     ti.init(ti.cpu, cpu_max_num_threads=1)
     bitstr = 0b1111111111111111000000000000000011111111111111110000000000000000
