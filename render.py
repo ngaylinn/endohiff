@@ -43,9 +43,9 @@ def render_map_decorations(tile_size=1):
 def render_env_map_min_fitness(name, env_data):
     """Render a map of minimum fitness values in an environment.
     """
-    plt.figure(figsize=(8,4.5))
+    plt.figure(figsize=(8, 4.5))
     plt.imshow(env_data['min_fitness'].transpose())
-    plt.clim(0.0, MAX_HIFF)
+    plt.clim(0, MAX_HIFF)
     render_map_decorations()
     plt.suptitle(f'Environment Min Fitness ({name})')
     plt.tight_layout()
@@ -87,7 +87,7 @@ def render_env_map_weights(name, env_data):
                 y * tile_size:(y + 1) * tile_size] = map_tile
 
     # Actually draw the figure.
-    plt.figure(figsize=(8,4.5))
+    plt.figure(figsize=(8, 4.5))
     plt.imshow(env_map.transpose())
     plt.clim(0.0, 1.0)
     render_map_decorations(tile_size)
@@ -107,6 +107,23 @@ def save_env_map(path, name, env_data):
     plt.close()
 
 
+def get_masked_column_data(data, column):
+    """Select a column of experiment data, with dead individuals masked out.
+    """
+    return np.ma.masked_array(
+        data.select(column).to_numpy().squeeze(),
+        data.select('id').to_numpy().squeeze() == 0)
+
+
+def get_one_frac(arr):
+    """Find the ratio of 1s to 0s for each bit string (int) in an array.
+    """
+    one_counts = np.zeros(len(arr))
+    for b in range(BITSTR_LEN):
+        one_counts += (arr >> b) & 1
+    return one_counts / 64
+
+
 def spatialize_pop_data(pop_data):
     """Transform raw population data from logs into a spatial layout to render.
 
@@ -121,23 +138,14 @@ def spatialize_pop_data(pop_data):
         ew=ew, eh=eh, cw=cw, ch=ch)
 
 
-def render_pop_map(pop_map):
-    """Render a map of population fitness / hiff scores to the current figure.
-
-    This is shared by code below to ensure the same color map is used
-    everywhere, including rendering unpopulated spaces in black.
-    """
-    image = plt.imshow(pop_map, plt.get_cmap().with_extremes(under='black'))
-    plt.clim(1, MAX_HIFF)
-    return image
-
-
 def save_hiff_map(path, name, expt_data):
     """Render a static map of final hiff scores from a population.
     """
-    plt.figure(figsize=(8,4.5))
-    pop_data = expt_data.select('hiff').to_numpy().flatten()
-    render_pop_map(spatialize_pop_data(pop_data))
+    plt.figure(figsize=(8, 4.5))
+    pop_data = get_masked_column_data(expt_data, 'hiff')
+    plt.imshow(spatialize_pop_data(pop_data),
+               plt.get_cmap().with_extremes(bad='black'))
+    plt.clim(0, MAX_HIFF)
     render_map_decorations(POP_TILE_SIZE)
     plt.suptitle(f'HIFF score map ({name})')
     plt.tight_layout()
@@ -145,13 +153,28 @@ def save_hiff_map(path, name, expt_data):
     plt.close()
 
 
+def save_one_frac_map(path, name, expt_data):
+    """Render a static map of a population's ratio of 1s to 0s.
+    """
+    plt.figure(figsize=(8, 4.5))
+    pop_data = get_masked_column_data(expt_data, 'one_frac')
+    plt.imshow(spatialize_pop_data(pop_data),
+               cmap=plt.get_cmap('Spectral').with_extremes(bad='black'))
+    plt.clim(0.0, 1.0)
+    render_map_decorations(POP_TILE_SIZE)
+    plt.suptitle(f'Bit ratio map ({name})')
+    plt.tight_layout()
+    plt.savefig(path / 'one_frac_map.png', dpi=600)
+    plt.close()
+
+
 def save_hiff_animation(path, expt_data, gif=False):
     """Save a video of the inner population over a single experiment.
     """
     # Grab the data we need and split it by generation.
-    fitness_by_generation = expt_data.select(
-        'hiff'
-    ).to_numpy().reshape(INNER_GENERATIONS, -1)
+    fitness_by_generation = get_masked_column_data(
+        expt_data, 'hiff'
+    ).reshape(INNER_GENERATIONS, -1)
 
     # Set up a figure with no decorations or padding.
     fig = plt.figure(frameon=False, figsize=(16, 9))
@@ -160,7 +183,9 @@ def save_hiff_animation(path, expt_data, gif=False):
     fig.add_axes(ax)
 
     # Render the first frame, and make an animation for the rest.
-    image = render_pop_map(spatialize_pop_data(fitness_by_generation[0]))
+    image = plt.imshow(spatialize_pop_data(fitness_by_generation[0]),
+                       plt.get_cmap().with_extremes(bad='black'))
+    plt.clim(0, MAX_HIFF)
     def animate_func(generation):
         image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
         return image
@@ -172,10 +197,39 @@ def save_hiff_animation(path, expt_data, gif=False):
         anim.save(path / 'hiff_map.mp4', writer='ffmpeg')
 
 
+def save_one_frac_animation(path, expt_data, gif=True):
+    """Save a video of a population's ratio of 1s to 0s over one experiment.
+    """
+    # Grab the data we need and split it by generation.
+    fitness_by_generation = get_masked_column_data(
+        expt_data, 'one_frac'
+    ).reshape(INNER_GENERATIONS, -1)
+
+    # Set up a figure with no decorations or padding.
+    fig = plt.figure(frameon=False, figsize=(16, 9))
+    ax = plt.Axes(fig, [0, 0, 1, 1])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+
+    # Render the first frame, and make an animation for the rest.
+    image = plt.imshow(spatialize_pop_data(fitness_by_generation[0]),
+                       plt.get_cmap('Spectral').with_extremes(bad='black'))
+    plt.clim(0.0, 1.0)
+    def animate_func(generation):
+        image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
+        return image
+    anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
+
+    if gif:
+        anim.save(path / 'one_frac_map.gif', writer='pillow', dpi=20)
+    else:
+        anim.save(path / 'one_frac_map.mp4', writer='ffmpeg')
+
+
 def save_all_results():
     """Render all visualizations for all primary experiments.
     """
-    num_artifacts = 2 * 2 * 3 * len(ENVIRONMENTS)
+    num_artifacts = 2 * 2 * 5 * len(ENVIRONMENTS)
     progress = trange(num_artifacts)
     for crossover in [True, False]:
         for migration in [True, False]:
@@ -183,13 +237,20 @@ def save_all_results():
                 name = env
                 path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
 
-                # Save an animation of fitness over time.
+                # Save animations of the full evolutionary experiment.
                 best_trial = pl.read_parquet(path / 'best_trial.parquet')
+                best_trial = best_trial.with_columns(
+                    one_frac=get_one_frac(best_trial['bitstr'].to_numpy())
+                )
+
                 save_hiff_animation(path, best_trial)
                 progress.update()
 
-                # Restrict to the last generation and render maps of the final fitnes
-                # and HIFF scores.
+                save_one_frac_animation(path, best_trial)
+                progress.update()
+
+                # Restrict to the last generation and render still maps of the
+                # final state.
                 best_trial = best_trial.filter(
                     pl.col('Generation') == INNER_GENERATIONS - 1
                 )
@@ -197,7 +258,10 @@ def save_all_results():
                 save_hiff_map(path, name, best_trial)
                 progress.update()
 
-                # Load and render the environment where this experiment happened.
+                save_one_frac_map(path, name, best_trial)
+                progress.update()
+
+                # Render visualizations of the environment for this experiment.
                 env_data = np.load(path / 'env.npz')
 
                 save_env_map(path, name, env_data)
