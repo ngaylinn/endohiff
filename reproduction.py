@@ -4,7 +4,7 @@
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, CROSSOVER_RATE, DEAD_ID,
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, DEAD_ID,
     MUTATION_MAGNITUDE, TOURNAMENT_SIZE)
 
 
@@ -17,7 +17,7 @@ def mutation() -> BITSTR_DTYPE:
     # the final probability of each bit being set is 1/(2**MUTATION_MAGNITUDE)
     mutation = ti.cast(-1, BITSTR_DTYPE)
     for _ in range(MUTATION_MAGNITUDE):
-        mutation &= ti.random(ti.uint64)
+        mutation &= ti.random(BITSTR_DTYPE)
     return mutation
 
 
@@ -30,21 +30,24 @@ def crossover(bitstr1: BITSTR_DTYPE, bitstr2: BITSTR_DTYPE) -> BITSTR_DTYPE:
 
 
 @ti.func
-def tournament_selection(pop: ti.template(), g: int, x: int, y: int) -> ti.template():
-    # If there are no living individuals at this location, return -1.
+def tournament_selection(pop, g, x, y, min_fitness):
+    # If there are no individuals at this location above the minimum fitness
+    # threshold, return -1.
     best_index = -1
-    best_fitness = -float('inf')
-    if ti.random() < CROSSOVER_RATE:
-        # Compare TOURNAMENT_SIZE random individuals
-        for _ in range(TOURNAMENT_SIZE):
-            # There may be dead individuals in this population, so we have to
-            # keep searching until we find a potential living mate.
-            offset = ti.random(int)
-            for i in range(CARRYING_CAPACITY):
-                competitor_index = (i + offset % CARRYING_CAPACITY)
-                competitor = pop[g, x, y, competitor_index]
-                if competitor.id != DEAD_ID and competitor.fitness > best_fitness:
-                    best_index = competitor_index
-                    best_fitness = competitor.fitness
+    best_fitness = min_fitness - 1
+
+    # Compare TOURNAMENT_SIZE random individuals
+    for _ in range(TOURNAMENT_SIZE):
+        # There may be dead individuals in this population, so we have to keep
+        # searching until we find a potential living mate. Although we may look
+        # at the full population, start with a random index to avoid bias in
+        # favor of smaller indices.
+        offset = ti.random(int)
+        for i in range(CARRYING_CAPACITY):
+            c = (i + offset) % CARRYING_CAPACITY
+            competitor = pop[g, x, y, c]
+            if competitor.id != DEAD_ID and competitor.fitness > best_fitness:
+                best_index = c
+                best_fitness = competitor.fitness
 
     return best_index

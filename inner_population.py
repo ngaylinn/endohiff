@@ -9,8 +9,8 @@ the full state of the simulation.
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, DEAD_ID, ENVIRONMENT_SHAPE,
-    INNER_GENERATIONS, MAX_POPULATION_SIZE, REFILL_RATE)
+    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, DEAD_ID,
+    ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_POPULATION_SIZE, REFILL_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -38,6 +38,8 @@ class InnerPopulation:
     def __init__(self):
         self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
         self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
+        # TODO: Instead of a counter, why not make it determined solely by
+        # g, x, y, and i?
         self.next_id = ti.field(dtype=ti.uint32, shape=())
         self.next_id[None] = 1
 
@@ -54,8 +56,8 @@ class InnerPopulation:
         # Randomize the population.
         for x, y, i in ti.ndrange(*self.shape):
             self.pop[0, x, y, i] = Individual(
-                bitstr=ti.cast(ti.random(int), BITSTR_DTYPE),
-                id=self.get_next_id(x, y, i), parent=0, fitness=0.0, hiff=0)
+                bitstr=ti.random(BITSTR_DTYPE),
+                id=self.get_next_id(x, y, i))
 
         # Keep assigning new ids instead of reusing them across experiments.
         self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
@@ -128,21 +130,28 @@ class InnerPopulation:
     @ti.kernel
     def populate_children(self, environment: ti.template(), g: int, crossover_enabled: bool):
         for x, y, i in ti.ndrange(*self.shape):
-            parent = self.pop[g, x, y, i]
+            min_fitness = environment.min_fitness[x, y]
+            # TODO: Without selection here, there's a big difference between
+            # baym and flat, but that's because flat is basically just doing a
+            # random search, not hill-climbing! If I do selection here, then
+            # the effect dissappears. Is there a happy-medium?
+            # p = tournament_selection(self.pop, g, x, y, min_fitness)
+            p = ti.select(self.pop[g, x, y, i].fitness >= min_fitness, i, -1)
 
-            # If this individual isn't fit enough to survive here...
-            if parent.fitness < environment.min_fitness[x, y]:
+            # If no one in this location is fit to reproduce...
+            if p < 0:
                 # Then mark it as dead in the next generation.
                 self.pop[g + 1, x, y, i] = DEAD
             else:
-                # Each individual replaces themselves with one child.
+                # Otherwise, make a child from the selected parent.
+                parent = self.pop[g, x, y, p]
                 child = Individual(
                     parent.bitstr, self.get_next_id(x, y, i), parent.id
                 )
 
                 # Maybe pick a mate and perform crossover
-                if crossover_enabled:
-                    m = tournament_selection(self.pop, g, x, y)
+                if crossover_enabled and ti.random() < CROSSOVER_RATE:
+                    m = tournament_selection(self.pop, g, x, y, min_fitness)
                     if m >= 0:
                         mate = self.pop[g, x, y, m]
                         child.bitstr = crossover(parent.bitstr, mate.bitstr)
