@@ -9,8 +9,8 @@ the full state of the simulation.
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
-    MAX_POPULATION_SIZE, REFILL_RATE)
+    BITSTR_DTYPE, CARRYING_CAPACITY, DEAD_ID, ENVIRONMENT_SHAPE,
+    INNER_GENERATIONS, MAX_POPULATION_SIZE, REFILL_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -31,7 +31,6 @@ class Individual:
 
 # Unoccupied spaces are marked with a DEAD individual (all fields set to 0)
 DEAD = Individual()
-DEAD_ID = 0
 
 
 @ti.data_oriented
@@ -122,6 +121,8 @@ class InnerPopulation:
                         if individual.id != DEAD_ID:
                             break
 
+            # TODO: Sometimes we repeat an id because of this line. Should we
+            # handle this differently? Do we even need to track ids?
             self.pop[g, x, y, i] = individual
 
     @ti.kernel
@@ -134,20 +135,20 @@ class InnerPopulation:
                 # Then mark it as dead in the next generation.
                 self.pop[g + 1, x, y, i] = DEAD
             else:
-                # Create a child from the individual and performing crossover
-                child = Individual()
-                if crossover_enabled and ti.random() < CROSSOVER_RATE:
-                    mate = tournament_selection(self.pop, g, x, y)
-                    child.bitstr = crossover(parent.bitstr, mate.bitstr)
-                else:
-                    child.bitstr = parent.bitstr
+                # Each individual replaces themselves with one child.
+                child = Individual(
+                    parent.bitstr, self.get_next_id(x, y, i), parent.id
+                )
+
+                # Maybe pick a mate and perform crossover
+                if crossover_enabled:
+                    m = tournament_selection(self.pop, g, x, y)
+                    if m >= 0:
+                        mate = self.pop[g, x, y, m]
+                        child.bitstr = crossover(parent.bitstr, mate.bitstr)
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
-
-                # Update child's metadata
-                child.parent = parent.id
-                child.id = self.get_next_id(x, y, i)
 
                 # Place the child in the next generation
                 self.pop[g + 1, x, y, i] = child

@@ -17,9 +17,14 @@ NUM_WEIGHTS = BITSTR_LEN - 1
 # Constants specifying the size and shape of the environment.
 # A 16x9 aspect ratio is ideal for most current displays.
 ENVIRONMENT_SHAPE = (64, 36)
-# A square number makes visualizing results easier.
-CARRYING_CAPACITY = 25
+# Visualize the population at some location as a square that's POP_TILE_SIZE on
+# each side. The total number of individuals is CARRYING_CAPACITY
+POP_TILE_SIZE = 5
+CARRYING_CAPACITY = POP_TILE_SIZE ** 2
 MAX_POPULATION_SIZE = np.prod(ENVIRONMENT_SHAPE) * CARRYING_CAPACITY
+
+# The id to indicate an empty spot in a population.
+DEAD_ID = 0
 
 # Constants configuring simulated evolution
 CROSSOVER_RATE = 0.5
@@ -27,7 +32,7 @@ CROSSOVER_RATE = 0.5
 MUTATION_MAGNITUDE = 6
 REFILL_RATE = 1.0
 TOURNAMENT_SIZE = 2
-INNER_GENERATIONS = 100
+INNER_GENERATIONS = 200
 NUM_REPETITIONS = 5
 
 # Where to save all the results we generate.

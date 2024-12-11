@@ -11,11 +11,9 @@ import polars as pl
 from tqdm import trange
 
 from constants import (
-    BITSTR_POWER, BITSTR_LEN, CARRYING_CAPACITY, ENVIRONMENT_SHAPE,
-    INNER_GENERATIONS, MAX_HIFF, OUTPUT_PATH)
+    BITSTR_POWER, BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
+    POP_TILE_SIZE, OUTPUT_PATH)
 from environment import ENVIRONMENTS
-
-POP_TILE_SIZE = int(sqrt(CARRYING_CAPACITY))
 
 
 def render_map_decorations(tile_size=1):
@@ -49,6 +47,7 @@ def render_env_map_min_fitness(name, env_data):
     render_map_decorations()
     plt.suptitle(f'Environment Min Fitness ({name})')
     plt.tight_layout()
+    plt.close()
 
 
 def render_env_map_weights(name, env_data):
@@ -93,6 +92,7 @@ def render_env_map_weights(name, env_data):
     render_map_decorations(tile_size)
     plt.suptitle(f'Environment Substring Weights ({name})')
     plt.tight_layout()
+    plt.close()
 
 
 def save_env_map(path, name, env_data):
@@ -168,7 +168,7 @@ def save_one_frac_map(path, name, expt_data):
     plt.close()
 
 
-def save_hiff_animation(path, expt_data, gif=False):
+def save_hiff_animation(path, expt_data, gif=True):
     """Save a video of the inner population over a single experiment.
     """
     # Grab the data we need and split it by generation.
@@ -195,6 +195,7 @@ def save_hiff_animation(path, expt_data, gif=False):
         anim.save(path / 'hiff_map.gif', writer='pillow', dpi=20)
     else:
         anim.save(path / 'hiff_map.mp4', writer='ffmpeg')
+    plt.close()
 
 
 def save_one_frac_animation(path, expt_data, gif=True):
@@ -224,6 +225,7 @@ def save_one_frac_animation(path, expt_data, gif=True):
         anim.save(path / 'one_frac_map.gif', writer='pillow', dpi=20)
     else:
         anim.save(path / 'one_frac_map.mp4', writer='ffmpeg')
+    plt.close()
 
 
 def save_all_results():

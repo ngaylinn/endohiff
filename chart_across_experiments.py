@@ -9,7 +9,7 @@ from scipy.stats import mannwhitneyu
 import seaborn as sns
 from tqdm import trange
 
-from constants import OUTPUT_PATH, MAX_HIFF
+from constants import OUTPUT_PATH, MAX_HIFF, MIN_HIFF
 
 
 def compare_hiff_distributions(data, column, file=None):
@@ -46,7 +46,7 @@ def chart_hiff_comparison(data, column, name, path):
     """
     fig = sns.displot(
         data, x='Mean Hiff', kind='kde', hue=column, aspect=1.33)
-    plt.xlim(200, MAX_HIFF)
+    plt.xlim(MIN_HIFF, MAX_HIFF)
     sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.6, 0.8))
     fig.set(title=f'Population HIFF Distribution ({name})')
     fig.savefig(path, dpi=600)

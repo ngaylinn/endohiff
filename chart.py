@@ -8,7 +8,7 @@ import polars as pl
 import seaborn as sns
 from tqdm import trange
 
-from constants import MAX_HIFF, OUTPUT_PATH
+from constants import INNER_GENERATIONS, MAX_HIFF, OUTPUT_PATH
 from environment import ENVIRONMENTS
 
 
@@ -19,11 +19,13 @@ warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout no
 def chart_hiff_dist(path, name, expt_data):
     """Generate a ridgeplot showing hiff distribution over generations.
     """
+    num_ridges = 10
+    ridge_gap = INNER_GENERATIONS // num_ridges
     expt_data = expt_data.filter(
         # Looking only at living individuals...
         (pl.col('id') > 0) &
         # Sample every ten generations...
-        (pl.col('Generation') % 10 == 9)
+        (pl.col('Generation') % ridge_gap == ridge_gap - 1)
     ).group_by(
         # For all cells across all generations...
         'Generation', 'x', 'y'
@@ -34,7 +36,7 @@ def chart_hiff_dist(path, name, expt_data):
 
     # Set up the ridge plot visualization.
     sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
-    pal = sns.cubehelix_palette(10, rot=-.25, light=.7)
+    pal = sns.cubehelix_palette(num_ridges, rot=-.25, light=.7)
     grid = sns.FacetGrid(
         expt_data, row='Generation', hue='Generation',
         aspect=15, height=0.5, palette=pal, xlim=(0, MAX_HIFF))
