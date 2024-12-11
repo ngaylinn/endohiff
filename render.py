@@ -47,7 +47,6 @@ def render_env_map_min_fitness(name, env_data):
     render_map_decorations()
     plt.suptitle(f'Environment Min Fitness ({name})')
     plt.tight_layout()
-    plt.close()
 
 
 def render_env_map_weights(name, env_data):
@@ -92,7 +91,6 @@ def render_env_map_weights(name, env_data):
     render_map_decorations(tile_size)
     plt.suptitle(f'Environment Substring Weights ({name})')
     plt.tight_layout()
-    plt.close()
 
 
 def save_env_map(path, name, env_data):
