@@ -23,12 +23,12 @@ def make_stretched():
     # fitness scores much, much wider.
     ramp_up_and_down = np.array([
          64,  64, 128, 128, 192, 192, 256, 256,
-        320, 320, 384, 384, 384, 384, 384, 384,
-        384, 384, 384, 384, 384, 384, 384, 384,
-        384, 384, 384, 384, 384, 384, 384, 448,
-        448, 384, 384, 384, 384, 384, 384, 384,
-        384, 384, 384, 384, 384, 384, 384, 384,
-        384, 384, 384, 384, 384, 384, 320, 320,
+        320, 320, 320, 320, 320, 320, 320, 320,
+        320, 320, 320, 320, 320, 320, 320, 320,
+        320, 320, 320, 320, 320, 320, 320, 448,
+        448, 320, 320, 320, 320, 320, 320, 320,
+        320, 320, 320, 320, 320, 320, 320, 320,
+        320, 320, 320, 320, 320, 320, 320, 320,
         256, 256, 192, 192, 128, 128,  64,  64])
 
     env = Environment()
@@ -44,7 +44,7 @@ def make_stretched():
 # fitness threshold that got the best fitness score in a garduated setting.
 def make_noramp():
     env = Environment()
-    env.min_fitness.from_numpy(np.full(ENVIRONMENT_SHAPE, 384))
+    env.min_fitness.from_numpy(np.full(ENVIRONMENT_SHAPE, 320))
     env.weights.fill(1.0)
     return env
 
