@@ -1,7 +1,9 @@
 """Visualize environments and populations with spatial maps.
 """
 
-from math import sqrt
+from argparse import ArgumentParser
+from pathlib import Path
+import sys
 
 import einops
 from matplotlib.animation import FuncAnimation
@@ -38,18 +40,18 @@ def render_map_decorations(tile_size=1):
     plt.grid(color='k')
 
 
-def render_env_map_min_fitness(name, env_data):
+def render_env_map_min_fitness(env_data):
     """Render a map of minimum fitness values in an environment.
     """
     plt.figure(figsize=(8, 4.5))
     plt.imshow(env_data['min_fitness'].transpose())
     plt.clim(0, MAX_HIFF)
     render_map_decorations()
-    plt.suptitle(f'Environment Min Fitness ({name})')
+    plt.suptitle(f'Environment Min Fitness')
     plt.tight_layout()
 
 
-def render_env_map_weights(name, env_data):
+def render_env_map_weights(env_data):
     """Render a map of minimum fitness values in an environment.
 
     This function summarizes all the substring weights for a location in a
@@ -89,18 +91,18 @@ def render_env_map_weights(name, env_data):
     plt.imshow(env_map.transpose())
     plt.clim(0.0, 1.0)
     render_map_decorations(tile_size)
-    plt.suptitle(f'Environment Substring Weights ({name})')
+    plt.suptitle(f'Environment Substring Weights')
     plt.tight_layout()
 
 
-def save_env_map(path, name, env_data):
+def save_env_map(path, env_data):
     """Summarize an environment with maps for min fitness and substr weights.
     """
-    render_env_map_min_fitness(name, env_data)
+    render_env_map_min_fitness(env_data)
     plt.savefig(path / 'env_map_fitness.png', dpi=600)
     plt.close()
 
-    render_env_map_weights(name, env_data)
+    render_env_map_weights(env_data)
     plt.savefig(path / 'env_map_weights.png', dpi=600)
     plt.close()
 
@@ -136,7 +138,7 @@ def spatialize_pop_data(pop_data):
         ew=ew, eh=eh, cw=cw, ch=ch)
 
 
-def save_hiff_map(path, name, expt_data):
+def save_hiff_map(path, expt_data):
     """Render a static map of final hiff scores from a population.
     """
     plt.figure(figsize=(8, 4.5))
@@ -145,13 +147,13 @@ def save_hiff_map(path, name, expt_data):
                plt.get_cmap().with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
     render_map_decorations(POP_TILE_SIZE)
-    plt.suptitle(f'HIFF score map ({name})')
+    plt.suptitle(f'HIFF score map')
     plt.tight_layout()
     plt.savefig(path / 'hiff_map.png', dpi=600)
     plt.close()
 
 
-def save_one_frac_map(path, name, expt_data):
+def save_one_frac_map(path, expt_data):
     """Render a static map of a population's ratio of 1s to 0s.
     """
     plt.figure(figsize=(8, 4.5))
@@ -160,7 +162,7 @@ def save_one_frac_map(path, name, expt_data):
                cmap=plt.get_cmap('Spectral').with_extremes(bad='black'))
     plt.clim(0.0, 1.0)
     render_map_decorations(POP_TILE_SIZE)
-    plt.suptitle(f'Bit ratio map ({name})')
+    plt.suptitle(f'Bit ratio map')
     plt.tight_layout()
     plt.savefig(path / 'one_frac_map.png', dpi=600)
     plt.close()
@@ -226,47 +228,57 @@ def save_one_frac_animation(path, expt_data, gif=True):
     plt.close()
 
 
-def save_all_results():
-    """Render all visualizations for all primary experiments.
-    """
-    num_artifacts = 2 * 2 * 5 * len(ENVIRONMENTS)
-    progress = trange(num_artifacts)
-    for crossover in [True, False]:
-        for migration in [True, False]:
-            for env in ENVIRONMENTS.keys():
-                name = env
-                path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
+def main(best_trial_file, env_file, path, verbose):
+    # Maybe show a progress bar as we generate files.
+    if verbose > 0:
+        num_artifacts = 5
+        tick_progress = trange(num_artifacts).update
+    else:
+        tick_progress = lambda: None
 
-                # Save animations of the full evolutionary experiment.
-                best_trial = pl.read_parquet(path / 'best_trial.parquet')
-                best_trial = best_trial.with_columns(
-                    one_frac=get_one_frac(best_trial['bitstr'].to_numpy())
-                )
+    # Save animations of the full evolutionary experiment.
+    best_trial_data = pl.read_parquet(best_trial_file)
+    best_trial_data = best_trial_data.with_columns(
+        one_frac=get_one_frac(best_trial_data['bitstr'].to_numpy())
+    )
+    save_hiff_animation(path, best_trial_data)
+    tick_progress()
+    save_one_frac_animation(path, best_trial_data)
+    tick_progress()
 
-                save_hiff_animation(path, best_trial)
-                progress.update()
+    # Restrict to the last generation and render still maps of the final state.
+    best_trial = best_trial_data.filter(
+        pl.col('Generation') == INNER_GENERATIONS - 1
+    )
+    save_hiff_map(path, best_trial)
+    tick_progress()
+    save_one_frac_map(path, best_trial)
+    tick_progress()
 
-                save_one_frac_animation(path, best_trial)
-                progress.update()
+    # Render visualizations of the environment for this experiment.
+    env_data = np.load(env_file)
+    save_env_map(path, env_data)
+    tick_progress()
 
-                # Restrict to the last generation and render still maps of the
-                # final state.
-                best_trial = best_trial.filter(
-                    pl.col('Generation') == INNER_GENERATIONS - 1
-                )
-
-                save_hiff_map(path, name, best_trial)
-                progress.update()
-
-                save_one_frac_map(path, name, best_trial)
-                progress.update()
-
-                # Render visualizations of the environment for this experiment.
-                env_data = np.load(path / 'env.npz')
-
-                save_env_map(path, name, env_data)
-                progress.update()
+    # Indicate the program completed successfully.
+    return 0
 
 
 if __name__ == '__main__':
-    save_all_results()
+    parser = ArgumentParser(
+        description='Render visualizations of single experiment.')
+    parser.add_argument(
+        'path', type=Path, help='Where to find experiment result data.')
+    parser.add_argument(
+        '-v', '--verbose', type=int, default=1,
+        help='Verbosity level (1 is default, 0 for no output)')
+    args = vars(parser.parse_args())
+
+    # Verify that the path is valid and the files we need exist.
+    args['best_trial_file'] = args['path'] / 'best_trial.parquet'
+    args['env_file'] = args['path'] / 'env.npz'
+    if not args['best_trial_file'].exists() or not args['env_file'].exists():
+        raise FileNotFoundError('Experiment result data not found.')
+
+    # Actually render these results.
+    sys.exit(main(**args))

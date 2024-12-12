@@ -1,22 +1,23 @@
 """Chart results from each experiment, independent of the others.
 """
 
+from argparse import ArgumentParser
+from pathlib import Path
+import sys
 import warnings
 
 import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
-from tqdm import trange
 
-from constants import INNER_GENERATIONS, MAX_HIFF, OUTPUT_PATH
-from environment import ENVIRONMENTS
+from constants import INNER_GENERATIONS, MAX_HIFF
 
 
 # Making ridgeplots with Seaborn generates lots of these warnings.
 warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
 
 
-def chart_hiff_dist(path, name, expt_data):
+def chart_hiff_dist(path, expt_data):
     """Generate a ridgeplot showing hiff distribution over generations.
     """
     num_ridges = 10
@@ -57,7 +58,7 @@ def chart_hiff_dist(path, name, expt_data):
     grid.set_titles('')
     grid.set(yticks=[], ylabel='')
     grid.despine(bottom=True, left=True)
-    grid.figure.suptitle(f'Hiff score distribution ({name})')
+    grid.figure.suptitle(f'Hiff score distribution')
     grid.figure.supylabel('Density')
     grid.figure.savefig(path / 'hiff_dist.png', dpi=600)
     plt.close()
@@ -67,25 +68,30 @@ def chart_hiff_dist(path, name, expt_data):
     plt.set_cmap('viridis')
 
 
-def chart_all_results():
-    """Chart results from each experiment.
-    """
-    num_artifacts = 2 * 2 * 1 * len(ENVIRONMENTS)
-    progress = trange(num_artifacts)
+def main(best_trial_file, path, verbose):
+    # Chart the hiff score distribution over time.
+    best_trial_data = pl.read_parquet(best_trial_file)
+    chart_hiff_dist(path, best_trial_data)
 
-    # Iterate through all the experiment conditions...
-    for crossover in [True, False]:
-        for migration in [True, False]:
-            for env in ENVIRONMENTS.keys():
-                name = env
-                path = OUTPUT_PATH / f'migration_{migration}_crossover_{crossover}' / f'{env}'
-
-                # Summarize results from a single experimental run (the best
-                # one for this condition).
-                expt_data = pl.read_parquet(path / 'best_trial.parquet')
-                chart_hiff_dist(path, name, expt_data)
-                progress.update()
+    # Indicate the program completed successfully.
+    return 0
 
 
 if __name__ == '__main__':
-    chart_all_results()
+    parser = ArgumentParser(
+        description='Chart results from a single experiment.')
+    parser.add_argument(
+        'path', type=Path, help='Where to find experiment result data.')
+    # Unused. Just here for consistency with the other scripts.
+    parser.add_argument(
+        '-v', '--verbose', type=int, default=1,
+        help='Verbosity level (1 is default, 0 for no output)')
+    args = vars(parser.parse_args())
+
+    # Verify that the path is valid and the file we need exists.
+    args['best_trial_file'] = args['path'] / 'best_trial.parquet'
+    if not args['best_trial_file'].exists():
+        raise FileNotFoundError('Experiment result data not found.')
+
+    # Actually render these results.
+    sys.exit(main(**args))

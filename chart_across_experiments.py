@@ -1,7 +1,10 @@
 """Tools for comparing performance between two experiment conditions.
 """
 
+from argparse import ArgumentParser
 from itertools import combinations
+from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import polars as pl
@@ -53,17 +56,20 @@ def chart_hiff_comparison(data, column, name, path):
     plt.close()
 
 
-def chart_across_experiments():
+def main(verbose):
     """Visualize comparisons between all the primary experiments.
     """
-    # Read the final hiff score data from all the experiments.
-    all_data = pl.read_parquet('output/*/*/hiff_scores.parquet')
-
+    # Read the final hiff score data from all experiments that have been run.
+    all_data = pl.read_parquet(OUTPUT_PATH / '*/*/hiff_scores.parquet')
     variants = all_data['variant'].unique()
     environments = all_data['environment'].unique()
 
-    num_artifacts = len(variants) + len(environments)
-    progress = trange(num_artifacts)
+    # Maybe show a progress bar as we generate files.
+    if verbose > 0:
+        num_artifacts = len(variants) + len(environments)
+        tick_progress = trange(num_artifacts).update
+    else:
+        tick_progress = lambda: None
 
     # For each variant (ie, w/ and w/o crossover, migration), compare
     # performance of that variant across all environments.
@@ -85,7 +91,7 @@ def chart_across_experiments():
         chart_hiff_comparison(
             hiff_scores, 'environment', variant_name,
             variant_path / f'hiff_dist.png')
-        progress.update()
+        tick_progress()
 
     # For each environment (ie, random, flat, baym), compare performance of all
     # variants in that environment.
@@ -105,7 +111,16 @@ def chart_across_experiments():
             chart_hiff_comparison(
                 hiff_scores, 'variant', env_name,
                 OUTPUT_PATH / f'hiff_dist_{env_name}.png')
-        progress.update()
+        tick_progress()
+
 
 if __name__ == '__main__':
-    chart_across_experiments()
+    parser = ArgumentParser(
+        description='Generate charts to compare results across experiment.')
+    parser.add_argument(
+        '-v', '--verbose', type=int, default=1,
+        help='Verbosity level (1 is default, 0 for no output)')
+    args = vars(parser.parse_args())
+
+    # Actually render these results.
+    sys.exit(main(**args))

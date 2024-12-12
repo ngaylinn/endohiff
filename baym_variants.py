@@ -71,10 +71,10 @@ def baym_variants():
         logs[name] = inner_log
 
         # Generate visualizations for each experiment.
-        save_env_map(path, name, env.to_numpy())
-        save_hiff_map(path, name, last_gen)
+        save_env_map(path, env.to_numpy())
+        save_hiff_map(path, last_gen)
         try:
-            chart_hiff_dist(path, name, inner_log)
+            chart_hiff_dist(path, inner_log)
         except ValueError:
             # If the population dies out immediately, rendering a distribution
             # chart fails, but that's okay. Just skip that visualization.
@@ -99,7 +99,7 @@ def baym_variants():
     chart_hiff_comparison(
         head_to_head, 'environment', 'baym variants',
         OUTPUT_PATH / 'baym_variants'/ f'hiff_dist.png')
-    with open(OUTPUT_PATH / 'baym_variants' / 'mannwitneyu.txt', 'w') as file:
+    with open(OUTPUT_PATH / 'baym_variants' / 'mannwhitneyu.txt', 'w') as file:
         compare_hiff_distributions(head_to_head, 'environment', file)
 
 

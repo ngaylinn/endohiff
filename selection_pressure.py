@@ -44,8 +44,8 @@ def selection_pressure():
         )
 
         # Generate visualizations for each experiment.
-        save_hiff_map(path, name, last_gen)
-        chart_hiff_dist(path, name, inner_log)
+        save_hiff_map(path, last_gen)
+        chart_hiff_dist(path, inner_log)
 
     # Merge the logs from the baym and stretched conditions so we can compare
     # them head-to-head.
@@ -66,7 +66,7 @@ def selection_pressure():
     chart_hiff_comparison(
         head_to_head, 'environment', 'selection_pressure',
         OUTPUT_PATH / 'selection_pressure'/ f'hiff_dist.png')
-    with open(OUTPUT_PATH / 'selection_pressure' / 'mannwitneyu.txt', 'w') as file:
+    with open(OUTPUT_PATH / 'selection_pressure' / 'mannwhitneyu.txt', 'w') as file:
         compare_hiff_distributions(head_to_head, 'environment', file)
 
 
