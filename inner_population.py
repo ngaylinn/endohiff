@@ -90,7 +90,7 @@ class InnerPopulation:
             # This magic number was calculated by brute force such that two
             # samples from a standard normal distribution will be (0, 0) 90% of
             # the time (meaning, each individual migrates 10% of the time).
-            scale_factor = 0.5
+            scale_factor = 0.25
             dx = ti.round(scale_factor * ti.randn())
             dy = ti.round(scale_factor * ti.randn())
 
@@ -100,7 +100,7 @@ class InnerPopulation:
             new_i = ti.random(ti.int32) % CARRYING_CAPACITY
 
             # If this individual is moving to a new location...
-            if new_x != x and new_y != y:
+            if new_x != x or new_y != y:
                 migrant = self.pop[g, x, y, i]
                 local = self.pop[g, new_x, new_y, new_i]
 
