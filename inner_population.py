@@ -21,9 +21,14 @@ class Individual:
     # Each individual across all generations has a unique identifier. Zero
     # indicates this individual is not alive.
     id: ti.uint32
-    # The identifier of the parent of this individual. Zero indicates this
-    # individual was spontaneously generated.
-    parent: ti.uint32
+    # The identifier of the primary parent of this individual. This is either
+    # the only parent (clonal reproduction) or one of two parents whose genes
+    # were combined via crossover. Zero indicates this individual was
+    # spontaneously generated.
+    parent1: ti.uint32
+    # The identifier of the secondary parent of this individual. This is zero
+    # except in the case where crossover was performed.
+    parent2: ti.uint32
     # The fitness score of this individual (weighted HIFF).
     fitness: ti.float32
     # The raw HIFF score of this individual.
@@ -155,6 +160,7 @@ class InnerPopulation:
                     if m >= 0:
                         mate = self.pop[g, x, y, m]
                         child.bitstr = crossover(parent.bitstr, mate.bitstr)
+                        child.parent2 = mate
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
