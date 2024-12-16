@@ -160,7 +160,7 @@ class InnerPopulation:
                     if m >= 0:
                         mate = self.pop[g, x, y, m]
                         child.bitstr = crossover(parent.bitstr, mate.bitstr)
-                        child.parent2 = mate
+                        child.parent2 = mate.id
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
