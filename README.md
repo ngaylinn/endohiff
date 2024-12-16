@@ -14,7 +14,7 @@ environment.yml, using a tool such as Conda, or manually.
 
 This project is optimized to run on a computer with a single CUDA-enabled GPU.
 It should be easily modifiable to run on other system configurations, but this
-may require small changes to calls to ti.init() and the Snakefile.
+may require small changes to calls to `ti.init()` and the `Snakefile`.
 
 This project runs several evolutionary experiments, using separate scripts to
 generate results, visualize runs, and chart performance within and across
@@ -36,5 +36,5 @@ batches:
 * `snakemake chart:<env>`: Ensure results from all experiments for the given
   environment have been charted.
 * `snakemake <env> --resources gpu=1`: Ensure all experiments for the given
-  environment have been run and all visualizations, charts, and figures have
-  been generated.
+  environment have been run and all associated visualizations, charts, and
+  figures have  been generated.
