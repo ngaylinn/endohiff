@@ -119,18 +119,17 @@ class InnerPopulation:
             if individual.id == DEAD_ID:
                 # Maybe let another individual spawn into this cell.
                 if ti.random() < REFILL_RATE:
-                    # If you pick a DEAD individual, try a few more times. This
-                    # makes it significantly easier for a migrant to colonize
-                    # an empty cell.
+                    # Try a few times to find an individual in this location
+                    # that's not dead, and let them take over the empty spot.
                     for _ in range(4):
-                        new_index = ti.random(int) %  CARRYING_CAPACITY
+                        new_index = ti.random(ti.int32) %  CARRYING_CAPACITY
                         individual = self.pop[g, x, y, new_index]
                         if individual.id != DEAD_ID:
-                            break
-
-            # TODO: Sometimes we repeat an id because of this line. Should we
-            # handle this differently? Do we even need to track ids?
-            self.pop[g, x, y, i] = individual
+                            # TODO: Sometimes we repeat an id because of this
+                            # line. Should we handle this differently? Do we
+                            # even need to track ids?
+                            self.pop[g, x, y, i] = individual
+                        break
 
     @ti.kernel
     def populate_children(self, environment: ti.template(), g: int, crossover_enabled: bool):
