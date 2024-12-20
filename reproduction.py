@@ -30,7 +30,7 @@ def crossover(bitstr1: BITSTR_DTYPE, bitstr2: BITSTR_DTYPE) -> BITSTR_DTYPE:
 
 
 @ti.func
-def tournament_selection(pop, g, x, y, min_fitness):
+def tournament_selection(pop, e, g, x, y, min_fitness):
     # If there are no individuals at this location above the minimum fitness
     # threshold, return -1.
     best_index = -1
@@ -45,7 +45,7 @@ def tournament_selection(pop, g, x, y, min_fitness):
         offset = ti.random(int)
         for i in range(CARRYING_CAPACITY):
             c = (i + offset) % CARRYING_CAPACITY
-            competitor = pop[g, x, y, c]
+            competitor = pop[e, g, x, y, c]
             if competitor.id != DEAD_ID and competitor.fitness > best_fitness:
                 best_index = c
                 best_fitness = competitor.fitness

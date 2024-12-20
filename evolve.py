@@ -1,23 +1,36 @@
 """Simulate evolution of a symbiont population in a spatial environment.
 """
 
+from functools import cache
+
 import numpy as np
 import polars as pl
 
-from constants import CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS
+from constants import INNER_GENERATIONS
 
 
-# Compute an index enumerating the generation number and position of each
-# individual in a population over evolutionary time. This will be combined with
-# raw data from the simulator to produce log files.
-g = INNER_GENERATIONS
-w, h = ENVIRONMENT_SHAPE
-c = CARRYING_CAPACITY
-index = pl.DataFrame({
-    'Generation': np.arange(g).repeat(w * h * c),
-    'x': np.tile(np.arange(w).repeat(h * c), g),
-    'y': np.tile(np.arange(h).repeat(c), g * w),
-})
+@cache
+def get_index(e, g, w, h, c):
+    """Get a table of metadata with the same shape as the raw simulation data.
+
+    By hstack'ing the index with the raw inner log data, we correctly annotate
+    which environment, generation, and position of each individual. The
+    arguments to this function describe the shape of the experiment data:
+        e: number of environments
+        g: number of generations
+        w: width of all environments
+        h: height of all environments
+        c: carrying capacity for each location in all environments
+    """
+    # Compute an index enumerating the generation number and position of each
+    # individual in a population over evolutionary time. This will be combined
+    # with raw data from the simulator to produce log files.
+    return pl.DataFrame({
+        'env': np.arange(e).repeat(g * w * h * c),
+        'Generation': np.tile(np.arange(g).repeat(w * h * c), e),
+        'x': np.tile(np.arange(w).repeat(h * c), e * g),
+        'y': np.tile(np.arange(h).repeat(c), e * g * w),
+    })
 
 
 def outer_fitness(inner_log):
@@ -48,6 +61,7 @@ def outer_fitness(inner_log):
 def evolve(inner_population, environment, migration, crossover):
     """Evolve inner_population in environment, with the given configuration.
     """
+    index = get_index(*inner_population.pop.shape)
     inner_population.randomize()
     for inner_generation in range(INNER_GENERATIONS):
         inner_population.evaluate(environment, inner_generation)

@@ -1,4 +1,4 @@
-"""The Environment data type and definitions for all control environments.
+"""The Environments data type and definitions for all control environments.
 """
 
 import numpy as np
@@ -10,41 +10,42 @@ from constants import (
 
 
 @ti.data_oriented
-class Environment:
-    def __init__(self):
+class Environments:
+    def __init__(self, count=1):
+        self.shape = (count,) + ENVIRONMENT_SHAPE
+
         # The threshold for surviving at each location in the environment.
-        self.min_fitness = ti.field(
-            dtype=float, shape=ENVIRONMENT_SHAPE)
+        self.min_fitness = ti.field(dtype=float, shape=self.shape)
 
         # The substring weights to pass into the weighted_hiff function, for
         # each location in the environment.
         self.weights = ti.Vector.field(
-            n=NUM_WEIGHTS, dtype=float, shape=ENVIRONMENT_SHAPE)
+            n=NUM_WEIGHTS, dtype=float, shape=self.shape)
 
-    def to_numpy(self):
+    def __getitem__(self, i):
         return {
-            'min_fitness': self.min_fitness.to_numpy(),
-            'weights': self.weights.to_numpy()
+            'min_fitness': self.min_fitness.to_numpy()[i],
+            'weights': self.weights.to_numpy()[i]
         }
 
 
-def make_flat():
-    env = Environment()
+def make_flat(count=1):
+    env = Environments(count)
     env.min_fitness.fill(0.0)
     env.weights.fill(1.0)
     return env
 
 
-def make_random():
-    env = Environment()
+def make_random(count=1):
+    env = Environments(count)
     env.min_fitness.from_numpy(
-        np.random.rand(*ENVIRONMENT_SHAPE).astype(np.float32) * MAX_HIFF)
+        np.random.rand(*env.shape).astype(np.float32) * MAX_HIFF)
     env.weights.from_numpy(
-        np.random.rand(*ENVIRONMENT_SHAPE, NUM_WEIGHTS).astype(np.float32))
+        np.random.rand(*env.shape, NUM_WEIGHTS).astype(np.float32))
     return env
 
 
-def make_baym():
+def make_baym(count=1):
     ew, _ = ENVIRONMENT_SHAPE
     buckets = 2 * BITSTR_POWER - 1
     bucket_width = ew // buckets
@@ -54,11 +55,11 @@ def make_baym():
     ramp_up_and_down[:ramp_up.size] = ramp_up
     ramp_up_and_down[-ramp_down.size:] = ramp_down
 
-    env = Environment()
+    env = Environments(count)
     env.min_fitness.from_numpy(
         np.broadcast_to(
             np.expand_dims(ramp_up_and_down, 1),
-            ENVIRONMENT_SHAPE))
+            env.shape))
     env.weights.fill(1.0)
     return env
 

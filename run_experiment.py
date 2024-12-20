@@ -16,7 +16,8 @@ import polars as pl
 import taichi as ti
 from tqdm import trange
 
-from constants import INNER_GENERATIONS, MAX_HIFF, NUM_REPETITIONS, OUTPUT_PATH
+from constants import (
+    INNER_GENERATIONS, MAX_HIFF, NUM_REPETITIONS, OUTPUT_PATH)
 from environment import ENVIRONMENTS
 from evolve import evolve
 from inner_population import InnerPopulation
@@ -90,7 +91,8 @@ def main(env, migration, crossover, verbose):
     # for posterity (this will beimportant for evolved environments)
     inner_population = InnerPopulation()
     environment = ENVIRONMENTS[env]()
-    np.savez(env_file, **environment.to_numpy())
+    # TODO: Save the appropriate environment data, not just the first one.
+    np.savez(env_file, **environment[0])
 
     # Aggregate and track hiff score data across all trials to compare variants
     # and environments with each other, but also remember the full details of
@@ -102,6 +104,9 @@ def main(env, migration, crossover, verbose):
         # Actually run the experiment.
         inner_log, outer_fitness = evolve(
             inner_population, environment, migration, crossover)
+
+        # TODO: Save logs from the right environmnet, not just the first one.
+        inner_log = inner_log.filter(pl.col('env') == 0)
 
         # Track the results.
         if outer_fitness > best_trial_fitness:

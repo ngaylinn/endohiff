@@ -21,7 +21,6 @@ ENVIRONMENT_SHAPE = (64, 36)
 # each side. The total number of individuals is CARRYING_CAPACITY
 POP_TILE_SIZE = 5
 CARRYING_CAPACITY = POP_TILE_SIZE ** 2
-MAX_POPULATION_SIZE = np.prod(ENVIRONMENT_SHAPE) * CARRYING_CAPACITY
 
 # The id to indicate an empty spot in a population.
 DEAD_ID = 0

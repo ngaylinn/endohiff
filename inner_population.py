@@ -10,7 +10,7 @@ import taichi as ti
 
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, DEAD_ID,
-    ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_POPULATION_SIZE, REFILL_RATE)
+    ENVIRONMENT_SHAPE, INNER_GENERATIONS, REFILL_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -40,53 +40,53 @@ DEAD = Individual()
 
 @ti.data_oriented
 class InnerPopulation:
-    def __init__(self):
-        self.shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
-        self.pop = Individual.field(shape=(INNER_GENERATIONS,) + self.shape)
-        # TODO: Instead of a counter, why not make it determined solely by
-        # g, x, y, and i?
-        self.next_id = ti.field(dtype=ti.uint32, shape=())
-        self.next_id[None] = 1
+    def __init__(self, num_environments=1):
+        self.shape = (num_environments,) + ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
+        self.pop = Individual.field(
+            shape=((num_environments, INNER_GENERATIONS) +
+                   ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)))
 
     @ti.func
-    def get_next_id(self, x, y, i):
-        # We generate a full population in every cell in parallel, so
-        # figure out what the position of this individual would be if we
-        # were computing that in sequence, and use that for setting its id.
-        offset = x * self.shape[1] * self.shape[2] + y * self.shape[2] + i
-        return self.next_id[None] + offset
+    def get_id(self, e, g, x, y, i):
+        n_g = INNER_GENERATIONS
+        n_x, n_y = ENVIRONMENT_SHAPE
+        n_i = CARRYING_CAPACITY
+        # Return a unique number (>= 1) to identify this individual. The id 0
+        # is reserved to indicate no living individual present.
+        return (e * n_g * n_x * n_y * n_i +
+                g * n_x * n_y * n_i +
+                x * n_y * n_i +
+                y * n_i +
+                i + 1)
 
     @ti.kernel
     def randomize(self):
         # Randomize the population.
-        for x, y, i in ti.ndrange(*self.shape):
-            self.pop[0, x, y, i] = Individual(
+        for e, x, y, i in ti.ndrange(*self.shape):
+            self.pop[e, 0, x, y, i] = Individual(
                 bitstr=ti.random(BITSTR_DTYPE),
-                id=self.get_next_id(x, y, i))
-
-        # Keep assigning new ids instead of reusing them across experiments.
-        self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
+                id=self.get_id(e, 0, x, y, i))
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: ti.i32):
-        for x, y, i in ti.ndrange(*self.shape):
+        for e, x, y, i in ti.ndrange(*self.shape):
             fitness, hiff = ti.cast(0.0, ti.float32), ti.cast(0, ti.uint32)
 
             # Only evaluate fitness of individuals that are alive.
-            individual = self.pop[g, x, y, i]
+            individual = self.pop[e, g, x, y, i]
             if individual.id != DEAD_ID:
                 fitness, hiff = weighted_hiff(
-                    individual.bitstr, environment.weights[x, y])
+                    individual.bitstr, environment.weights[e, x, y])
 
-            self.pop[g, x, y, i].fitness = fitness
-            self.pop[g, x, y, i].hiff = hiff
+            self.pop[e, g, x, y, i].fitness = fitness
+            self.pop[e, g, x, y, i].hiff = hiff
 
     @ti.kernel
     def migrate(self, g: int):
         # Migrants replace local individuals only if they have a higher fitness
         # than the current inhabitant. This ensures that more fit individuals
         # are prioritized for migration.
-        for x, y, i in ti.ndrange(*self.shape):
+        for e, x, y, i in ti.ndrange(*self.shape):
             # This magic number was calculated by brute force such that two
             # samples from a standard normal distribution will be (0, 0) 90% of
             # the time (meaning, each individual migrates 10% of the time).
@@ -101,19 +101,19 @@ class InnerPopulation:
 
             # If this individual is moving to a new location...
             if new_x != x or new_y != y:
-                migrant = self.pop[g, x, y, i]
-                local = self.pop[g, new_x, new_y, new_i]
+                migrant = self.pop[e, g, x, y, i]
+                local = self.pop[e, g, new_x, new_y, new_i]
 
                 # If the migrant is more fit than the resident in the location
                 # it's moving to, replace the local and leave an empty space.
                 if migrant.fitness > local.fitness:
-                    self.pop[g, new_x, new_y, new_i] = migrant
-                    self.pop[g, x, y, i] = DEAD
+                    self.pop[e, g, new_x, new_y, new_i] = migrant
+                    self.pop[e, g, x, y, i] = DEAD
 
     @ti.kernel
     def refill_empty_spaces(self, g: int):
-        for x, y, i in ti.ndrange(*self.shape):
-            individual = self.pop[g, x, y, i]
+        for e, x, y, i in ti.ndrange(*self.shape):
+            individual = self.pop[e, g, x, y, i]
 
             # If this spot was unoccupied last generation...
             if individual.id == DEAD_ID:
@@ -123,41 +123,41 @@ class InnerPopulation:
                     # that's not dead, and let them take over the empty spot.
                     for _ in range(4):
                         new_index = ti.random(ti.int32) %  CARRYING_CAPACITY
-                        individual = self.pop[g, x, y, new_index]
+                        individual = self.pop[e, g, x, y, new_index]
                         if individual.id != DEAD_ID:
                             # TODO: Sometimes we repeat an id because of this
                             # line. Should we handle this differently? Do we
                             # even need to track ids?
-                            self.pop[g, x, y, i] = individual
+                            self.pop[e, g, x, y, i] = individual
                         break
 
     @ti.kernel
     def populate_children(self, environment: ti.template(), g: int, crossover_enabled: bool):
-        for x, y, i in ti.ndrange(*self.shape):
-            min_fitness = environment.min_fitness[x, y]
+        for e, x, y, i in ti.ndrange(*self.shape):
+            min_fitness = environment.min_fitness[e, x, y]
             # TODO: Without selection here, there's a big difference between
             # baym and flat, but that's because flat is basically just doing a
             # random search, not hill-climbing! If I do selection here, then
             # the effect dissappears. Is there a happy-medium?
             # p = tournament_selection(self.pop, g, x, y, min_fitness)
-            p = ti.select(self.pop[g, x, y, i].fitness >= min_fitness, i, -1)
+            p = ti.select(self.pop[e, g, x, y, i].fitness >= min_fitness, i, -1)
 
             # If no one in this location is fit to reproduce...
             if p < 0:
                 # Then mark it as dead in the next generation.
-                self.pop[g + 1, x, y, i] = DEAD
+                self.pop[e, g + 1, x, y, i] = DEAD
             else:
                 # Otherwise, make a child from the selected parent.
-                parent = self.pop[g, x, y, p]
+                parent = self.pop[e, g, x, y, p]
                 child = Individual(
-                    parent.bitstr, self.get_next_id(x, y, i), parent.id
+                    parent.bitstr, self.get_id(e, g, x, y, i), parent.id
                 )
 
                 # Maybe pick a mate and perform crossover
                 if crossover_enabled and ti.random() < CROSSOVER_RATE:
-                    m = tournament_selection(self.pop, g, x, y, min_fitness)
+                    m = tournament_selection(self.pop, e, g, x, y, min_fitness)
                     if m >= 0:
-                        mate = self.pop[g, x, y, m]
+                        mate = self.pop[e, g, x, y, m]
                         child.bitstr = crossover(parent.bitstr, mate.bitstr)
                         child.parent2 = mate.id
 
@@ -165,12 +165,7 @@ class InnerPopulation:
                 child.bitstr ^= mutation()
 
                 # Place the child in the next generation
-                self.pop[g + 1, x, y, i] = child
-
-        # Increment the next_id by the maximum number of individuals we might
-        # have populated this generation. There may be unused ids, but that's
-        # fine, we just care that ids are never reused.
-        self.next_id[None] += ti.static(MAX_POPULATION_SIZE)
+                self.pop[e, g + 1, x, y, i] = child
 
     def propagate(self, environment, generation, migrate_enabled, crossover_enabled):
         if migrate_enabled:
