@@ -14,8 +14,7 @@ from tqdm import trange
 
 from constants import (
     BITSTR_POWER, BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
-    POP_TILE_SIZE, OUTPUT_PATH)
-from environment import ENVIRONMENTS
+    POP_TILE_SIZE)
 
 
 def render_map_decorations(tile_size=1):
