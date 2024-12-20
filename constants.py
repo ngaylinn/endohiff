@@ -30,8 +30,9 @@ CROSSOVER_RATE = 0.5
 # The probability of flipping a bit is 1/(2**MUTATION_MAGNITUDE) ~= 0.016
 MUTATION_MAGNITUDE = 6
 REFILL_RATE = 1.0
+MIGRATION_RATE = 0.5
 TOURNAMENT_SIZE = 2
-INNER_GENERATIONS = 200
+INNER_GENERATIONS = 100
 NUM_REPETITIONS = 5
 
 # Where to save all the results we generate.

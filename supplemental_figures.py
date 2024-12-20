@@ -29,7 +29,7 @@ hiffs = ti.field(ti.u32, shape=NUM_VALUES)
 @ti.kernel
 def compute_hiffs():
     for i in range(NUM_VALUES):
-        _, hiffs[i]  = hiff(i)
+        hiffs[i]  = hiff(i)
 
 
 def save_hiff_diagram():
@@ -52,8 +52,8 @@ def save_migration_diagram():
     """
     np.random.seed(42)
     sns.relplot(
-        x=0.5*np.random.randn(constants.CARRYING_CAPACITY),
-        y=0.5*np.random.randn(constants.CARRYING_CAPACITY),
+        x=constants.MIGRATION_RATE*np.random.randn(constants.CARRYING_CAPACITY),
+        y=constants.MIGRATION_RATE*np.random.randn(constants.CARRYING_CAPACITY),
         kind='scatter'
     )
     plt.xticks([-1.5, -0.5, 0.5, 1.5], labels=[])

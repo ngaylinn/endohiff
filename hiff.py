@@ -43,7 +43,8 @@ def weighted_hiff(bitstr, weights):
 
 @ti.func
 def hiff(bitstr):
-    return weighted_hiff(bitstr, ti.Vector([1.0] * NUM_WEIGHTS))
+    fitness, hiff = weighted_hiff(bitstr, ti.Vector([1.0] * NUM_WEIGHTS))
+    return hiff
 
 
 @ti.kernel
@@ -56,6 +57,6 @@ def hiff_demo(bitstr: BITSTR_DTYPE, weights: ti.template()):
 # A demo to compute the weighted hiff score of some bit string.
 if __name__ == '__main__':
     ti.init(ti.cpu, cpu_max_num_threads=1)
-    bitstr = 0b1111111111111111000000000000000011111111111111110000000000000000
+    bitstr = 0b0000000000000000000000000000000000000000000000000000000000000000
     weights = ti.Vector([1.0] * NUM_WEIGHTS)
     hiff_demo(bitstr, weights)

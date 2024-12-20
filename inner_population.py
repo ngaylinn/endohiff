@@ -10,7 +10,7 @@ import taichi as ti
 
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, DEAD_ID,
-    ENVIRONMENT_SHAPE, INNER_GENERATIONS, REFILL_RATE)
+    ENVIRONMENT_SHAPE, INNER_GENERATIONS, MIGRATION_RATE, REFILL_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -87,12 +87,8 @@ class InnerPopulation:
         # than the current inhabitant. This ensures that more fit individuals
         # are prioritized for migration.
         for e, x, y, i in ti.ndrange(*self.shape):
-            # This magic number was calculated by brute force such that two
-            # samples from a standard normal distribution will be (0, 0) 90% of
-            # the time (meaning, each individual migrates 10% of the time).
-            scale_factor = 0.25
-            dx = ti.round(scale_factor * ti.randn())
-            dy = ti.round(scale_factor * ti.randn())
+            dx = ti.round(MIGRATION_RATE * ti.randn())
+            dy = ti.round(MIGRATION_RATE * ti.randn())
 
             # Find the target location to migrate to.
             new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
@@ -129,7 +125,7 @@ class InnerPopulation:
                             # line. Should we handle this differently? Do we
                             # even need to track ids?
                             self.pop[e, g, x, y, i] = individual
-                        break
+                            break
 
     @ti.kernel
     def populate_children(self, environment: ti.template(), g: int, crossover_enabled: bool):
