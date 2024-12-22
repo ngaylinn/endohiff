@@ -66,7 +66,7 @@ def evaluate_skew(env, migration, crossover):
             if inner_generation + 1 < INNER_GENERATIONS:
                 inner_population.propagate(
                     environment, inner_generation, migration, crossover)
-        # Cound up the number of 1's in each evolved individual.
+        # Count up the number of 1's in each evolved individual.
         update_totals(inner_population, i * NUM_PARALLEL)
 
     # Grab the one counts off the GPU and convert them to a flat list with DEAD
