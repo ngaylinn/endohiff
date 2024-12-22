@@ -48,16 +48,12 @@ class InnerPopulation:
 
     @ti.func
     def get_id(self, e, g, x, y, i):
-        n_g = INNER_GENERATIONS
-        n_x, n_y = ENVIRONMENT_SHAPE
-        n_i = CARRYING_CAPACITY
+        ig = INNER_GENERATIONS
+        ew, eh = ENVIRONMENT_SHAPE
+        cc = CARRYING_CAPACITY
         # Return a unique number (>= 1) to identify this individual. The id 0
         # is reserved to indicate no living individual present.
-        return (e * n_g * n_x * n_y * n_i +
-                g * n_x * n_y * n_i +
-                x * n_y * n_i +
-                y * n_i +
-                i + 1)
+        return 1 + i + cc * (y + eh * (x + ew * (g + ig * e)))
 
     @ti.kernel
     def randomize(self):
@@ -91,8 +87,8 @@ class InnerPopulation:
             dy = ti.round(MIGRATION_RATE * ti.randn())
 
             # Find the target location to migrate to.
-            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0]))
-            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1]))
+            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0] - 1))
+            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1] - 1))
             new_i = ti.random(ti.int32) % CARRYING_CAPACITY
 
             # If this individual is moving to a new location...
@@ -103,7 +99,12 @@ class InnerPopulation:
                 # If the migrant is more fit than the resident in the location
                 # it's moving to, replace the local and leave an empty space.
                 if migrant.fitness > local.fitness:
-                    self.pop[e, g, new_x, new_y, new_i] = migrant
+                    # To avoid race conditions, use the next generation as a
+                    # scratch space, so this block of threads isn't reading and
+                    # writing to the same memory location. After this kernel,
+                    # call commit_scratch_space to copy the results back to the
+                    # present generation.
+                    self.pop[e, g + 1, new_x, new_y, new_i] = migrant
                     self.pop[e, g, x, y, i] = DEAD
 
     @ti.kernel
@@ -118,14 +119,31 @@ class InnerPopulation:
                     # Try a few times to find an individual in this location
                     # that's not dead, and let them take over the empty spot.
                     for _ in range(4):
-                        new_index = ti.random(ti.int32) %  CARRYING_CAPACITY
-                        individual = self.pop[e, g, x, y, new_index]
+                        new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+                        individual = self.pop[e, g, x, y, new_i]
                         if individual.id != DEAD_ID:
                             # TODO: Sometimes we repeat an id because of this
                             # line. Should we handle this differently? Do we
                             # even need to track ids?
-                            self.pop[e, g, x, y, i] = individual
+                            # To avoid race conditions, use the next generation
+                            # as a scratch space, so this block of threads
+                            # isn't reading and writing to the same memory
+                            # location. After this kernel, call
+                            # commit_scratch_space to copy the results back to
+                            # the present generation.
+                            self.pop[e, g + 1, x, y, i] = individual
                             break
+
+    @ti.kernel
+    def clear_scratch_space(self, g: int):
+        for e, x, y, i in ti.ndrange(*self.shape):
+            self.pop[e, g + 1, x, y, i] = DEAD
+
+    @ti.kernel
+    def commit_scratch_space(self, g: int):
+        for e, x, y, i in ti.ndrange(*self.shape):
+            if self.pop[e, g + 1, x, y, i].id != DEAD_ID:
+                self.pop[e, g, x, y, i] = self.pop[e, g + 1, x, y ,i]
 
     @ti.kernel
     def populate_children(self, environment: ti.template(), g: int, crossover_enabled: bool):
@@ -146,7 +164,7 @@ class InnerPopulation:
                 # Otherwise, make a child from the selected parent.
                 parent = self.pop[e, g, x, y, p]
                 child = Individual(
-                    parent.bitstr, self.get_id(e, g, x, y, i), parent.id
+                    parent.bitstr, self.get_id(e, g + 1, x, y, i), parent.id
                 )
 
                 # Maybe pick a mate and perform crossover
@@ -164,9 +182,19 @@ class InnerPopulation:
                 self.pop[e, g + 1, x, y, i] = child
 
     def propagate(self, environment, generation, migrate_enabled, crossover_enabled):
+        # TODO: Find a better way to do this! Using the next generation as a
+        # scractch space like this is ugly and inefficient, but it was a
+        # simple way to fix a race condition. When redesigning the propagation
+        # process, redesign this code to be more streamlined.
+        self.clear_scratch_space(generation)
         if migrate_enabled:
             self.migrate(generation)
+        self.commit_scratch_space(generation)
+
+        self.clear_scratch_space(generation)
         self.refill_empty_spaces(generation)
+        self.commit_scratch_space(generation)
+
         self.populate_children(environment, generation, crossover_enabled)
 
     def to_numpy(self):
