@@ -154,15 +154,14 @@ class InnerPopulation:
             # random search, not hill-climbing! If I do selection here, then
             # the effect dissappears. Is there a happy-medium?
             # p = tournament_selection(self.pop, g, x, y, min_fitness)
-            p = ti.select(self.pop[e, g, x, y, i].fitness >= min_fitness, i, -1)
+            parent = self.pop[e, g, x, y, i]
 
             # If no one in this location is fit to reproduce...
-            if p < 0:
+            if parent.id == DEAD_ID or parent.fitness < min_fitness:
                 # Then mark it as dead in the next generation.
                 self.pop[e, g + 1, x, y, i] = DEAD
             else:
                 # Otherwise, make a child from the selected parent.
-                parent = self.pop[e, g, x, y, p]
                 child = Individual(
                     parent.bitstr, self.get_id(e, g + 1, x, y, i), parent.id
                 )
