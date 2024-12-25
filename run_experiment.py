@@ -8,7 +8,8 @@ experiments are run with and without crossover and migration enabled to measure
 the impact of these variations on the evolutionary dynamics.
 """
 
-from argparse import ArgumentError, ArgumentParser
+from argparse import ArgumentParser
+import os
 import sys
 
 import numpy as np
@@ -17,106 +18,163 @@ import taichi as ti
 from tqdm import trange
 
 from constants import (
-    INNER_GENERATIONS, MAX_HIFF, NUM_REPETITIONS, OUTPUT_PATH)
-from environment import ENVIRONMENTS
-from evolve import evolve
+    INNER_GENERATIONS, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
+    OUTPUT_PATH)
+from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation
+from outer_population import OuterPopulation
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
 ti.init(ti.cuda, unrolling_limit=0)
 
 
-def print_summary(name, expt_data, migration, crossover):
-    """For debugging, print a brief summary of a single experiment."""
-    best_hiff, best_bitstr = expt_data.filter(
-        pl.col('hiff') == pl.col('hiff').max()
-    ).select(
-        'hiff', 'bitstr'
-    )
-    print(f'Experiment condition: {name}')
-    print(f'Migration: {migration}, Crossover: {crossover}')
-    print(f'{len(best_hiff)} individual(s) found the highest score '
-          f'({best_hiff[0]} out of a possible {MAX_HIFF})')
-    print(f'Example: {best_bitstr[0]:064b}')
-    print()
+def get_variant_name(migration, crossover):
+    return f'migration_{migration}_crossover_{crossover}'
 
 
-def summarize_hiff_scores(inner_log, env_name, variant_name):
-    """Reduce logs data to just a summary of fitness over time.
-
-    Since fitness is fundamentally spatial in this experiment, record the
-    distribution of local mean fitness scores in each generation. Make sure
-    it's annotated with the environment and variant name in order to compare
-    across experimental conditions.
+def get_all_trials():
+    """A generator summarizing all experiment trials run by this script.
     """
-    # Restrict to living individuals in the final generation.
-    return inner_log.filter(
-        (pl.col('id') > 0) &
-        (pl.col('Generation') == INNER_GENERATIONS - 1)
-    # Average hiff scores for each location in the
-    # environment, so we can analyze relative concentrations
-    ).group_by(
-        'x', 'y'
-    ).agg(
-        pl.col('hiff').mean().alias('Mean Hiff')
-    # Add metadata for slicing results.
-    ).with_columns(
-        environment=pl.lit(env_name),
-        variant=pl.lit(variant_name)
-    # Drop the location data. We just want to make a histogram over locations
-    # in the environment, so we need samples from each location, but don't need
-    # to remember where the samples came from.
-    ).drop(
-        'x', 'y'
-    )
+    for migration in [True, False]:
+        for crossover in [True, False]:
+            variant_name = get_variant_name(migration, crossover)
+            for env_name in ALL_ENVIRONMENT_NAMES:
+                for trial in range(NUM_TRIALS):
+                    log_file = (
+                        OUTPUT_PATH / variant_name / env_name /
+                        f'trial{trial}' / 'inner_log.parquet')
+                    yield (variant_name, env_name, trial, log_file)
 
 
-def main(env, migration, crossover, verbose):
-    # Setup output directory and files
-    variant_name = f'migration_{migration}_crossover_{crossover}'
-    path = OUTPUT_PATH / variant_name / env
-    path.mkdir(exist_ok=True, parents=True)
-    env_file = path / 'env.npz'
-    best_trial_file = path / 'best_trial.parquet'
-    hiff_scores_file = path / 'hiff_scores.parquet'
+def link_best_trial(path, best_index):
+    best_trial_link = path / 'best_trial'
+
+    # Remove the old best trial symlink, if it exists.
+    try:
+        os.unlink(best_trial_link)
+    except FileNotFoundError:
+        pass
+
+    # Create a symlink to indicate which trial was the best one.
+    os.symlink(
+        os.path.abspath(path / f'trial{best_index}'), best_trial_link,
+        target_is_directory=True)
+
+
+def score_populations(all_logs):
+    """Score how well the inner populations evolved in this configuration.
+
+    This is used to find the "best" run across multiple trials, and to evolve
+    environments for inner populations to evolve within.
+    """
+    scores = []
+    for inner_log in all_logs:
+        score = inner_log.filter(
+            # Look only at live individuals in the last generation.
+            (pl.col('id') > 0) &
+            (pl.col('Generation') == INNER_GENERATIONS - 1)
+        # Find the average hiff score in every location of the environment.
+        ).group_by(
+            'x', 'y'
+        ).agg(
+            pl.col('hiff').mean()
+        # Now take the median location-level hiff score per environment, as a
+        # proxy for how heavily the distribution is weighted towards high scores.
+        )['hiff'].median()
+
+        # Handle missing values gracefully.
+        scores.append(0.0 if score is None else float(score))
+
+    return np.array(scores)
+
+
+def run_experiment_static_env(env_name, migration, crossover):
+    variant_name = get_variant_name(migration, crossover)
+    path = OUTPUT_PATH / variant_name / env_name
+
+    # Evolve a population of bitstrings in a static environment NUM_TRIALS
+    # times, in parallel.
+    environments = STATIC_ENVIRONMENTS[env_name](NUM_TRIALS)
+    inner_population = InnerPopulation(NUM_TRIALS)
+    inner_population.evolve(environments, migration, crossover)
+
+    # Save a full summary for each trial.
+    all_logs = inner_population.get_logs()
+    for t, inner_log in enumerate(all_logs):
+        trial_path = path / f'trial{t}'
+        trial_path.mkdir(exist_ok=True, parents=True)
+        # Save a copy of the environment with every trial even though it
+        # doesn't change, just for consistency with the evolved environment
+        # outputs.
+        np.savez(trial_path / 'env.npz', **environments[t])
+        inner_log.write_parquet(trial_path / 'inner_log.parquet')
+
+    # Create a symlink to indicate which trial was the best one.
+    best_index = score_populations(all_logs).argmax()
+    link_best_trial(path, best_index)
+
+
+def run_experiment_evolved_env(migration, crossover, verbose):
+    variant_name = get_variant_name(migration, crossover)
+    path = OUTPUT_PATH / variant_name / 'cppn'
 
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
-        repetitions = trange(NUM_REPETITIONS)
+        print('Evolving environments...')
+        tick_progress = trange(NUM_TRIALS * OUTER_GENERATIONS).update
     else:
-        repetitions = range(NUM_REPETITIONS)
+        tick_progress = lambda: None
 
-    # Generate the population and environment. Save a copy of the environment
-    # for posterity (this will beimportant for evolved environments)
-    inner_population = InnerPopulation()
-    environment = ENVIRONMENTS[env]()
-    # TODO: Save the appropriate environment data, not just the first one.
-    np.savez(env_file, **environment[0])
+    # Evovle a population of CPPN environments NUM_TRIALS times.
+    outer_population = OuterPopulation()
+    inner_population = InnerPopulation(OUTER_POPULATION_SIZE)
+    best_trial_fitness = -1
+    best_trial_index = -1
+    for t in range(NUM_TRIALS):
+        # Evolve an outer population of environments.
+        outer_population.randomize()
+        for og in range(OUTER_GENERATIONS):
+            environments = outer_population.make_environments()
+            inner_population.evolve(environments, migration, crossover)
+            outer_fitness = score_populations(inner_population.get_logs())
+            if og + 1 < OUTER_GENERATIONS:
+                outer_population.propagate(outer_fitness, og)
+            tick_progress()
 
-    # Aggregate and track hiff score data across all trials to compare variants
-    # and environments with each other, but also remember the full details of
-    # the best trial to visualize what happened.
-    hiff_score_frames = []
-    best_trial_data = None
-    best_trial_fitness = 0
-    for _ in repetitions:
-        # Actually run the experiment.
-        inner_log, outer_fitness = evolve(
-            inner_population, environment, migration, crossover)
+        # Track the best evolved environment for this trial and all trials.
+        best_env = outer_fitness.argmax()
+        best_fitness = outer_fitness[best_env]
+        if best_fitness > best_trial_fitness:
+            best_trial_fitness = best_fitness
+            best_trial_index = t
 
-        # TODO: Save logs from the right environmnet, not just the first one.
-        inner_log = inner_log.filter(pl.col('env') == 0)
+        # Setup the output directory.
+        trial_path = path / f'trial{t}'
+        trial_path.mkdir(exist_ok=True, parents=True)
 
-        # Track the results.
-        if outer_fitness > best_trial_fitness:
-            best_trial_data = inner_log
-        hiff_score_frames.append(
-            summarize_hiff_scores(inner_log, env, variant_name))
+        # Find which evolved environment from the last trial evolved the best
+        # and save a visualization of that environment.
+        np.savez(trial_path / 'env.npz', **environments[best_env])
 
-    # Once all trials for this experiment have run, save the results to disk.
-    best_trial_data.write_parquet(best_trial_file)
-    pl.concat(hiff_score_frames).write_parquet(hiff_scores_file)
+        # Save summaries of the final inner population for the best environment
+        # from each trial.
+        inner_log = inner_population.get_logs(best_env)
+        inner_log.write_parquet(trial_path / 'inner_log.parquet')
+
+        # Save the fitness history for the full outer population in each trial.
+        outer_log = outer_population.get_logs()
+        outer_log.write_parquet(trial_path / 'outer_log.parquet')
+
+    # Create a symlink to indicate which trial was the best one.
+    link_best_trial(path, best_trial_index)
+
+
+def main(env_name, migration, crossover, verbose):
+    if env_name == 'cppn':
+        run_experiment_evolved_env(migration, crossover, verbose)
+    else:
+        run_experiment_static_env(env_name, migration, crossover)
 
     # Indicate the program completed successfully.
     return 0
@@ -127,7 +185,7 @@ if __name__ == '__main__':
         description='Run a single experiment and record results.')
     parser.register('type', 'bool string', lambda s: s == 'True')
     parser.add_argument(
-        'env', type=str, help='Which environment to use for this experiment.')
+        'env_name', type=str, help='Which environment to use for this experiment.')
     parser.add_argument(
         'migration', type='bool string',
         help='Whether to enable migration for this experiment (True or False).')
@@ -140,8 +198,7 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     # Make sure the specified environment is recognized.
-    if not args['env'] in ENVIRONMENTS:
-        raise ValueError('Unrecognized environment name.')
+    if not args['env_name'] in ALL_ENVIRONMENT_NAMES:
+        raise ValueError(f'env_name must be one of: {ALL_ENVIRONMENT_NAMES}')
 
-    # Actually render these results.
     sys.exit(main(**args))

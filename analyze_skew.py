@@ -9,7 +9,7 @@ import taichi as ti
 from tqdm import trange
 
 from constants import BITSTR_LEN, CARRYING_CAPACITY, DEAD_ID, ENVIRONMENT_SHAPE, INNER_GENERATIONS
-from environment import ENVIRONMENTS
+from environments import STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation
 
 ti.init(ti.cuda)
@@ -54,7 +54,7 @@ def update_totals(population: ti.template(), trials_completed: int):
 
 def evaluate_skew(env, migration, crossover):
     inner_population = InnerPopulation(NUM_PARALLEL)
-    environment = ENVIRONMENTS[env](NUM_PARALLEL)
+    environment = STATIC_ENVIRONMENTS[env](NUM_PARALLEL)
 
     # Evolve a whole population TOTAL_TRIALS times running many trials in
     # paralell on the GPU.

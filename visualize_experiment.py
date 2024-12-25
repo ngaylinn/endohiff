@@ -1,20 +1,77 @@
-"""Visualize environments and populations with spatial maps.
+"""Visualize a single experiment trial with charts, maps, and animations.
 """
 
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
+import warnings
 
 import einops
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
+import seaborn as sns
 from tqdm import trange
 
 from constants import (
     BITSTR_POWER, BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
     POP_TILE_SIZE)
+
+
+# Making ridgeplots with Seaborn generates lots of these warnings.
+warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
+
+
+def chart_hiff_dist(path, inner_log):
+    """Generate a ridgeplot showing hiff distribution over generations.
+    """
+    num_ridges = 10
+    ridge_gap = INNER_GENERATIONS // num_ridges
+    inner_log = inner_log.filter(
+        # Looking only at living individuals...
+        (pl.col('id') > 0) &
+        # Sample every ten generations...
+        (pl.col('Generation') % ridge_gap == ridge_gap - 1)
+    ).group_by(
+        # For all cells across all generations...
+        'Generation', 'x', 'y'
+    ).agg(
+        # Find the mean hiff score for all individuals in this cell.
+        pl.col('hiff').mean().alias('Mean Hiff')
+    )
+
+    # Set up the ridge plot visualization.
+    sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
+    pal = sns.cubehelix_palette(num_ridges, rot=-.25, light=.7)
+    grid = sns.FacetGrid(
+        inner_log, row='Generation', hue='Generation',
+        aspect=15, height=0.5, palette=pal, xlim=(0, MAX_HIFF))
+
+    # Plot the mean hiff score for each sample generation and label it with the
+    # generation number.
+    grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
+             clip_on=True, fill=True, alpha=1.0)
+    def label(x, color, label):
+        ax = plt.gca()
+        ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
+                transform=ax.transAxes)
+    grid.map(label, 'Mean Hiff')
+
+    # Apply styling and save results.
+    grid.refline(y=0, linestyle='-', clip_on=False)
+    grid.figure.subplots_adjust(hspace=-0.25)
+    grid.set_titles('')
+    grid.set(yticks=[], ylabel='')
+    grid.despine(bottom=True, left=True)
+    grid.figure.suptitle(f'Hiff score distribution')
+    grid.figure.supylabel('Density')
+    grid.figure.savefig(path / 'hiff_dist.png', dpi=600)
+    plt.close()
+
+    # Restore the default colormap so we don't alter other charts generated
+    # after this one.
+    plt.set_cmap('viridis')
 
 
 def render_map_decorations(tile_size=1):
@@ -137,11 +194,11 @@ def spatialize_pop_data(pop_data):
         ew=ew, eh=eh, cw=cw, ch=ch)
 
 
-def save_hiff_map(path, expt_data):
+def save_hiff_map(path, inner_log):
     """Render a static map of final hiff scores from a population.
     """
     plt.figure(figsize=(8, 4.5))
-    pop_data = get_masked_column_data(expt_data, 'hiff')
+    pop_data = get_masked_column_data(inner_log, 'hiff')
     plt.imshow(spatialize_pop_data(pop_data),
                plt.get_cmap().with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
@@ -152,11 +209,11 @@ def save_hiff_map(path, expt_data):
     plt.close()
 
 
-def save_one_frac_map(path, expt_data):
+def save_one_frac_map(path, inner_log):
     """Render a static map of a population's ratio of 1s to 0s.
     """
     plt.figure(figsize=(8, 4.5))
-    pop_data = get_masked_column_data(expt_data, 'one_frac')
+    pop_data = get_masked_column_data(inner_log, 'one_frac')
     plt.imshow(spatialize_pop_data(pop_data),
                cmap=plt.get_cmap('Spectral').with_extremes(bad='black'))
     plt.clim(0.0, 1.0)
@@ -167,12 +224,12 @@ def save_one_frac_map(path, expt_data):
     plt.close()
 
 
-def save_hiff_animation(path, expt_data, gif=True):
+def save_hiff_animation(path, inner_log, gif=True):
     """Save a video of the inner population over a single experiment.
     """
     # Grab the data we need and split it by generation.
     fitness_by_generation = get_masked_column_data(
-        expt_data, 'hiff'
+        inner_log, 'hiff'
     ).reshape(INNER_GENERATIONS, -1)
 
     # Set up a figure with no decorations or padding.
@@ -197,12 +254,12 @@ def save_hiff_animation(path, expt_data, gif=True):
     plt.close()
 
 
-def save_one_frac_animation(path, expt_data, gif=True):
+def save_one_frac_animation(path, inner_log, gif=True):
     """Save a video of a population's ratio of 1s to 0s over one experiment.
     """
     # Grab the data we need and split it by generation.
     fitness_by_generation = get_masked_column_data(
-        expt_data, 'one_frac'
+        inner_log, 'one_frac'
     ).reshape(INNER_GENERATIONS, -1)
 
     # Set up a figure with no decorations or padding.
@@ -227,37 +284,53 @@ def save_one_frac_animation(path, expt_data, gif=True):
     plt.close()
 
 
-def main(best_trial_file, env_file, path, verbose):
+def visualize_experiment(path, inner_log, env_data, verbose=1):
+    """Generate all single trial visualizations, and save to path.
+    """
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
-        num_artifacts = 5
+        num_artifacts = 6
         tick_progress = trange(num_artifacts).update
     else:
         tick_progress = lambda: None
 
-    # Save animations of the full evolutionary experiment.
-    best_trial_data = pl.read_parquet(best_trial_file)
-    best_trial_data = best_trial_data.with_columns(
-        one_frac=get_one_frac(best_trial_data['bitstr'].to_numpy())
+    inner_log = inner_log.with_columns(
+        one_frac=get_one_frac(inner_log['bitstr'].to_numpy())
     )
-    save_hiff_animation(path, best_trial_data)
+
+    save_one_frac_animation(path, inner_log)
     tick_progress()
-    save_one_frac_animation(path, best_trial_data)
+
+    save_hiff_animation(path, inner_log)
+    tick_progress()
+
+    try:
+        chart_hiff_dist(path, inner_log)
+    except ValueError:
+        # If the population goes extinct, rendering a distribution chart can
+        # fail, but that's okay. Just skip that visualization.
+        pass
     tick_progress()
 
     # Restrict to the last generation and render still maps of the final state.
-    best_trial = best_trial_data.filter(
+    inner_log = inner_log.filter(
         pl.col('Generation') == INNER_GENERATIONS - 1
     )
-    save_hiff_map(path, best_trial)
-    tick_progress()
-    save_one_frac_map(path, best_trial)
+
+    save_one_frac_map(path, inner_log)
     tick_progress()
 
-    # Render visualizations of the environment for this experiment.
-    env_data = np.load(env_file)
+    save_hiff_map(path, inner_log)
+    tick_progress()
+
     save_env_map(path, env_data)
     tick_progress()
+
+
+def main(path, verbose):
+    inner_log = pl.read_parquet(path / 'inner_log.parquet')
+    env_data = np.load(path / 'env.npz')
+    visualize_experiment(path, inner_log, env_data, verbose)
 
     # Indicate the program completed successfully.
     return 0
@@ -265,7 +338,7 @@ def main(best_trial_file, env_file, path, verbose):
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Render visualizations of single experiment.')
+        description='Generate visualizations of a single experiment trial.')
     parser.add_argument(
         'path', type=Path, help='Where to find experiment result data.')
     parser.add_argument(
@@ -273,11 +346,4 @@ if __name__ == '__main__':
         help='Verbosity level (1 is default, 0 for no output)')
     args = vars(parser.parse_args())
 
-    # Verify that the path is valid and the files we need exist.
-    args['best_trial_file'] = args['path'] / 'best_trial.parquet'
-    args['env_file'] = args['path'] / 'env.npz'
-    if not args['best_trial_file'].exists() or not args['env_file'].exists():
-        raise FileNotFoundError('Experiment result data not found.')
-
-    # Actually render these results.
     sys.exit(main(**args))

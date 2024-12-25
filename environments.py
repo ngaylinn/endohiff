@@ -22,10 +22,10 @@ class Environments:
         self.weights = ti.Vector.field(
             n=NUM_WEIGHTS, dtype=float, shape=self.shape)
 
-    def __getitem__(self, i):
+    def __getitem__(self, e):
         return {
-            'min_fitness': self.min_fitness.to_numpy()[i],
-            'weights': self.weights.to_numpy()[i]
+            'min_fitness': self.min_fitness.to_numpy()[e],
+            'weights': self.weights.to_numpy()[e]
         }
 
 
@@ -65,11 +65,13 @@ def make_baym(count=1):
 
 
 # The named environments to experiment with.
-ENVIRONMENTS = {
+STATIC_ENVIRONMENTS = {
     'flat': make_flat,
     'random': make_random,
     'baym': make_baym,
 }
+
+ALL_ENVIRONMENT_NAMES = sorted(list(STATIC_ENVIRONMENTS.keys()) + ['cppn'])
 
 
 # A demo to visualize any of the environments defined above.

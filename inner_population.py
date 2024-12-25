@@ -6,6 +6,8 @@ mostly just a wrapper around a field of Individuals, used to track and record
 the full state of the simulation.
 """
 
+import numpy as np
+import polars as pl
 import taichi as ti
 
 from constants import (
@@ -41,16 +43,28 @@ DEAD = Individual()
 @ti.data_oriented
 class InnerPopulation:
     def __init__(self, num_environments=1):
-        self.shape = (num_environments,) + ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
-        self.pop = Individual.field(
-            shape=((num_environments, INNER_GENERATIONS) +
-                   ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)))
-
-    @ti.func
-    def get_id(self, e, g, x, y, i):
+        self.num_environments = num_environments
+        ne = num_environments
         ig = INNER_GENERATIONS
         ew, eh = ENVIRONMENT_SHAPE
         cc = CARRYING_CAPACITY
+
+        # The shape of the population in each generation
+        self.shape = (ne, ew, eh, cc)
+        # A full population of individuals for all generations.
+        self.pop = Individual.field(shape=(ne, ig, ew, eh, cc))
+
+        # An index with positional metadata for each Individual in self.pop,
+        # used to generate annotated log files.
+        self.index = pl.DataFrame({
+            'Generation':  np.arange(ig).repeat(ew * eh * cc),
+            'x': np.tile(np.arange(ew).repeat(eh * cc), ig),
+            'y': np.tile(np.arange(eh).repeat(cc), ig * ew),
+        })
+
+    @ti.func
+    def get_id(self, e, g, x, y, i):
+        ne, ig, ew, eh, cc = self.pop.shape
         # Return a unique number (>= 1) to identify this individual. The id 0
         # is reserved to indicate no living individual present.
         return 1 + i + cc * (y + eh * (x + ew * (g + ig * e)))
@@ -196,8 +210,29 @@ class InnerPopulation:
 
         self.populate_children(environment, generation, crossover_enabled)
 
-    def to_numpy(self):
-        return self.pop.to_numpy()
+    def evolve(self, environments, migration, crossover):
+        self.randomize()
+        for generation in range(INNER_GENERATIONS):
+            self.evaluate(environments, generation)
+            if generation + 1 < INNER_GENERATIONS:
+                self.propagate(environments, generation, migration, crossover)
 
+    def get_logs(self, env_index=None):
+        def annotate_log_data(log_data, e):
+            return pl.DataFrame({
+                key: field_data[e].flatten()
+                for key, field_data in log_data.items()
+            }).hstack(
+                self.index
+            )
 
-
+        # Return either the inner logs from a single environment, or a list of
+        # logs from each environment.
+        log_data = self.pop.to_numpy()
+        if env_index is not None:
+            return annotate_log_data(log_data, env_index)
+        else:
+            return [
+                annotate_log_data(log_data, e)
+                for e in range(self.num_environments)
+            ]
