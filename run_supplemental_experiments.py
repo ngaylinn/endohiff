@@ -12,7 +12,7 @@ from compare_experiments import compare_experiments
 from constants import INNER_GENERATIONS, OUTPUT_PATH
 from environments import Environments, make_baym, make_flat
 from inner_population import InnerPopulation
-from visualize_experiment import visualize_experiment
+from visualize_inner_population import visualize_experiment
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
@@ -76,7 +76,7 @@ def baym_variants(verbose):
             print(f'Visualizing results for {env_name}...')
         env_path = OUTPUT_PATH / 'baym_variants' / env_name
         env_path.mkdir(exist_ok=True, parents=True)
-        visualize_experiment(env_path, inner_log, env[0], verbose)
+        visualize_experiment(env_path, inner_log, env.to_numpy()[0], verbose)
 
     # Merge the logs from the baym and stretched conditions so we can compare
     # them head-to-head.
@@ -120,7 +120,7 @@ def selection_pressure(verbose):
             print(f'Visualizing results for {env_name}...')
         env_path = OUTPUT_PATH / 'selection_pressure' / env_name
         env_path.mkdir(exist_ok=True, parents=True)
-        visualize_experiment(env_path, inner_log, env[0], verbose)
+        visualize_experiment(env_path, inner_log, env.to_numpy()[0], verbose)
 
     # Merge the logs from the baym and stretched conditions so we can compare
     # them head-to-head.

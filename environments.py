@@ -12,7 +12,14 @@ from constants import (
 @ti.data_oriented
 class Environments:
     def __init__(self, count=1):
+        self.count = count
         self.shape = (count,) + ENVIRONMENT_SHAPE
+
+        # For converting the fields defined below to a Numpy structured array.
+        self.dtype = np.dtype([
+            ('min_fitness', np.float32, ENVIRONMENT_SHAPE),
+            ('weights', np.float32, ENVIRONMENT_SHAPE + (NUM_WEIGHTS,)),
+        ])
 
         # The threshold for surviving at each location in the environment.
         self.min_fitness = ti.field(dtype=float, shape=self.shape)
@@ -22,11 +29,11 @@ class Environments:
         self.weights = ti.Vector.field(
             n=NUM_WEIGHTS, dtype=float, shape=self.shape)
 
-    def __getitem__(self, e):
-        return {
-            'min_fitness': self.min_fitness.to_numpy()[e],
-            'weights': self.weights.to_numpy()[e]
-        }
+    def to_numpy(self):
+        result = np.zeros(self.count, self.dtype)
+        result['min_fitness'] = self.min_fitness.to_numpy()
+        result['weights'] = self.weights.to_numpy()
+        return result
 
 
 def make_flat(count=1):

@@ -1,4 +1,4 @@
-"""Visualize a single experiment trial with charts, maps, and animations.
+"""Visualize the performance of an inner popuation from a single experiment trial.
 """
 
 from argparse import ArgumentParser
@@ -28,18 +28,30 @@ def chart_hiff_dist(path, inner_log):
     """
     num_ridges = 10
     ridge_gap = INNER_GENERATIONS // num_ridges
+    sample_generations = set(
+        range(ridge_gap - 1, INNER_GENERATIONS, ridge_gap))
     inner_log = inner_log.filter(
         # Looking only at living individuals...
         (pl.col('id') > 0) &
         # Sample every ten generations...
-        (pl.col('Generation') % ridge_gap == ridge_gap - 1)
+        (pl.col('Generation').is_in(sample_generations))
     ).group_by(
         # For all cells across all generations...
         'Generation', 'x', 'y'
     ).agg(
         # Find the mean hiff score for all individuals in this cell.
         pl.col('hiff').mean().alias('Mean Hiff')
-    )
+    ).drop('x', 'y')
+
+    # Since we only count living individuals, we might have no data for some
+    # generations if the population went extinct. Make sure we can still
+    # generate a chart by filling in data for missing generations.
+    missing_generations = (
+        sample_generations - set(inner_log['Generation'].unique()))
+    inner_log = pl.concat((inner_log, pl.DataFrame({
+        'Generation': sorted(missing_generations),
+        'Mean Hiff': 0.0
+    })))
 
     # Set up the ridge plot visualization.
     sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
@@ -51,7 +63,7 @@ def chart_hiff_dist(path, inner_log):
     # Plot the mean hiff score for each sample generation and label it with the
     # generation number.
     grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
-             clip_on=True, fill=True, alpha=1.0)
+             clip_on=True, fill=True, alpha=1.0, warn_singular=False)
     def label(x, color, label):
         ax = plt.gca()
         ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
@@ -151,15 +163,15 @@ def render_env_map_weights(env_data):
     plt.tight_layout()
 
 
-def save_env_map(path, env_data):
+def save_env_map(path, env_data, prefix='env_map'):
     """Summarize an environment with maps for min fitness and substr weights.
     """
     render_env_map_min_fitness(env_data)
-    plt.savefig(path / 'env_map_fitness.png', dpi=600)
+    plt.savefig(path / f'{prefix}_fitness.png', dpi=600)
     plt.close()
 
     render_env_map_weights(env_data)
-    plt.savefig(path / 'env_map_weights.png', dpi=600)
+    plt.savefig(path / f'{prefix}_weights.png', dpi=600)
     plt.close()
 
 
@@ -304,12 +316,7 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
     save_hiff_animation(path, inner_log)
     tick_progress()
 
-    try:
-        chart_hiff_dist(path, inner_log)
-    except ValueError:
-        # If the population goes extinct, rendering a distribution chart can
-        # fail, but that's okay. Just skip that visualization.
-        pass
+    chart_hiff_dist(path, inner_log)
     tick_progress()
 
     # Restrict to the last generation and render still maps of the final state.
@@ -329,7 +336,7 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
 
 def main(path, verbose):
     inner_log = pl.read_parquet(path / 'inner_log.parquet')
-    env_data = np.load(path / 'env.npz')
+    env_data = np.load(path / 'env.npy')
     visualize_experiment(path, inner_log, env_data, verbose)
 
     # Indicate the program completed successfully.
@@ -338,7 +345,7 @@ def main(path, verbose):
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Generate visualizations of a single experiment trial.')
+        description='Generate visualizations of an inner population from single experiment trial.')
     parser.add_argument(
         'path', type=Path, help='Where to find experiment result data.')
     parser.add_argument(

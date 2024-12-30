@@ -1,8 +1,9 @@
 from itertools import product
 
-from constants import NUM_TRIALS
+from constants import NUM_TRIALS, OUTER_POPULATION_SIZE
 from environments import ALL_ENVIRONMENT_NAMES
 
+SAMPLE_ENVIRONMENTS = list(range(OUTER_POPULATION_SIZE))
 ALL_TRIALS = list(range(NUM_TRIALS))
 
 
@@ -11,7 +12,7 @@ rule all:
     # Experiment data
     expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/inner_log.parquet',
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
-    expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env.npz',
+    expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env.npy',
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
 
     # Single experiment visualizations
@@ -29,6 +30,14 @@ rule all:
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
     expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/hiff_dist.png',
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
+
+    # Extra visualizations for experiments with evolved environmnets
+    expand('output/migration_{migration}_crossover_{crossover}/cppn/trial{t}/outer_fitness.png',
+           migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
+    expand('output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness.png',
+           migration=[True, False], crossover=[True, False]),
+    expand('output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness_by_trial.png',
+           migration=[True, False], crossover=[True, False]),
 
     # Cross-experiment comparison charts
     'output/hiff_scores.parquet',
@@ -62,6 +71,8 @@ rule all:
     # Supplemental figures
     'output/hiff.png',
     'output/migration.png',
+    expand('output/random_cppn_environments/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
 
 
 # -----------------------------------------------------------------------------
@@ -71,15 +82,16 @@ rule all:
 rule evolve_one:
   output:
     expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/inner_log.parquet', t=ALL_TRIALS),
-    expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/env.npz', t=ALL_TRIALS),
+    expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/outer_log.parquet', t=ALL_TRIALS),
+    expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/env.npy', t=ALL_TRIALS),
   resources: gpu=1 # This process expects to monopolize the GPU.
   params: '{env} {migration} {crossover} -v 0'
   shell: 'python3 run_experiment.py {params}'
 
-rule visualize_one:
+rule visualize_inner:
   input:
     'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/inner_log.parquet',
-    'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env.npz',
+    'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env.npy',
   output:
     'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env_map_fitness.png',
     'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env_map_weights.png',
@@ -89,7 +101,17 @@ rule visualize_one:
     'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/one_frac_map.png',
     'output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/hiff_dist.png',
   params: 'output/migration_{migration}_crossover_{crossover}/{env}/trial{t} -v 0'
-  shell: 'python3 visualize_experiment.py {params}'
+  shell: 'python3 visualize_inner_population.py {params}'
+
+rule visualize_outer:
+  input:
+    expand('output/migration_{{migration}}_crossover_{{crossover}}/cppn/trial{t}/outer_log.parquet', t=ALL_TRIALS),
+  output:
+    expand('output/migration_{{migration}}_crossover_{{crossover}}/cppn/trial{t}/outer_fitness.png', t=ALL_TRIALS),
+    'output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness.png',
+    'output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness_by_trial.png',
+  params: 'output/migration_{migration}_crossover_{crossover}/cppn -v 0'
+  shell: 'python3 visualize_outer_population.py {params}'
 
 rule compare_experiments:
   input:
@@ -133,18 +155,28 @@ rule generate_supplemental_figures:
     'output/migration.png',
   shell: 'python3 generate_supplemental_figures.py'
 
+rule visualize_random_cppn_environments:
+  output:
+    expand('output/random_cppn_environments/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
+  shell: 'python3 outer_population.py'
 
 # -----------------------------------------------------------------------------
 # Rules to run all or part of the pipeline on just one environment.
 # -----------------------------------------------------------------------------
 
 for env in ALL_ENVIRONMENT_NAMES:
+  # Some outputs are only generated for the cppn environment. We disable those
+  # outputs in other circumstances by calling the expand() macro with an empty
+  # list as one of its arguments.
+  is_cppn = ([True] if env == 'cppn' else [])
+
   rule:
     name: f'evolve:{env}'
     input:
       expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/inner_log.parquet',
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
-      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/env.npz',
+      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/env.npy',
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
 
   # TODO: We want to visualize all trials for the evolved environments, but
@@ -168,13 +200,19 @@ for env in ALL_ENVIRONMENT_NAMES:
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
       expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/hiff_dist.png',
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
+      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/cppn/trial{{t}}/outer_fitness.png',
+             migration=[True, False], crossover=[True, False], t=ALL_TRIALS, use_output=is_cppn),
+      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/cppn/outer_fitness.png',
+             migration=[True, False], crossover=[True, False], use_output=is_cppn),
+      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/cppn/outer_fitness_by_trial.png',
+             migration=[True, False], crossover=[True, False], use_output=is_cppn),
 
   rule:
     name: f'{env}'
     input:
       expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/inner_log.parquet',
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
-      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/env.npz',
+      expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/env.npy',
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
       expand(f'output/migration_{{migration}}_crossover_{{crossover}}/{env}/trial{{t}}/env_map_fitness.png',
              migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
@@ -200,7 +238,7 @@ rule evolve:
   input:
     expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/inner_log.parquet',
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
-    expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env.npz',
+    expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/env.npy',
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
 
 rule visualize:
@@ -219,3 +257,9 @@ rule visualize:
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
     expand('output/migration_{migration}_crossover_{crossover}/{env}/trial{t}/hiff_dist.png',
            migration=[True, False], crossover=[True, False], env=ALL_ENVIRONMENT_NAMES, t=ALL_TRIALS),
+    expand('output/migration_{migration}_crossover_{crossover}/cppn/trial{t}/outer_fitness.png',
+           migration=[True, False], crossover=[True, False], t=ALL_TRIALS),
+    expand('output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness.png',
+           migration=[True, False], crossover=[True, False]),
+    expand('output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness_by_trial.png',
+           migration=[True, False], crossover=[True, False]),
