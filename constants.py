@@ -3,7 +3,6 @@
 
 from pathlib import Path
 
-import numpy as np
 import taichi as ti
 
 # The size of the bit strings to evolve, and several related constants.
@@ -33,7 +32,7 @@ REFILL_RATE = 1.0
 MIGRATION_RATE = 0.5
 TOURNAMENT_SIZE = 2
 INNER_GENERATIONS = 100
-OUTER_GENERATIONS = 5
+OUTER_GENERATIONS = 25
 OUTER_POPULATION_SIZE = 5
 NUM_TRIALS = 5
 
