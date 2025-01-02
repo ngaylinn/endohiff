@@ -103,7 +103,8 @@ class InnerPopulation:
             # Find the target location to migrate to.
             new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0] - 1))
             new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1] - 1))
-            new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+            # NOTE: Careful typing to satisfy Taichi'a debugger.
+            new_i = ti.cast(ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
 
             # If this individual is moving to a new location...
             if new_x != x or new_y != y:
@@ -133,7 +134,9 @@ class InnerPopulation:
                     # Try a few times to find an individual in this location
                     # that's not dead, and let them take over the empty spot.
                     for _ in range(4):
-                        new_i = ti.random(ti.int32) % CARRYING_CAPACITY
+                        # NOTE: Careful typing to satisfy Taichi'a debugger.
+                        new_i = ti.cast(
+                            ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
                         individual = self.pop[e, g, x, y, new_i]
                         if individual.id != DEAD_ID:
                             # TODO: Sometimes we repeat an id because of this

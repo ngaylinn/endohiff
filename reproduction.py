@@ -42,7 +42,8 @@ def tournament_selection(pop, e, g, x, y, min_fitness):
         # searching until we find a potential living mate. Although we may look
         # at the full population, start with a random index to avoid bias in
         # favor of smaller indices.
-        offset = ti.random(ti.int32)
+        # NOTE: Careful typing to satisfy Taichi's debugger.
+        offset = ti.cast(ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
         for i in range(CARRYING_CAPACITY):
             c = (i + offset) % CARRYING_CAPACITY
             competitor = pop[e, g, x, y, c]

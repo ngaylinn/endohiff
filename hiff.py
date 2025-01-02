@@ -31,12 +31,18 @@ def weighted_hiff(bitstr, weights):
             hiff += score
 
             # Shift the mask to look at the next substr in order.
-            substr_mask <<= substr_len
-            w += 1
+            # NOTE: The check here isn't necessary, but without it Taichi's
+            # debugger will fire an overwhelming number of warnings.
+            if s + 1 < BITSTR_LEN // substr_len:
+                substr_mask <<= substr_len
+                w += 1
 
         # Start looking at substr with twice the length as last iteration.
-        mask = mask << substr_len | mask
-        substr_len *= 2
+        # NOTE: The check here isn't necessary, but without it Taichi's
+        # debugger will fire an overwhelming number of warnings.
+        if p + 1 < BITSTR_POWER:
+            mask = mask << substr_len | mask
+            substr_len *= 2
 
     return fitness, hiff
 
