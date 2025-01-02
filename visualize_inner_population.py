@@ -334,10 +334,14 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
     tick_progress()
 
 
-def main(path, verbose):
-    inner_log = pl.read_parquet(path / 'inner_log.parquet')
-    env_data = np.load(path / 'env.npy')
-    visualize_experiment(path, inner_log, env_data, verbose)
+def main(paths, verbose):
+    for path in paths:
+        if verbose > 0:
+            print()
+            print(f'Visualizing results from {path}:')
+        inner_log = pl.read_parquet(path / 'inner_log.parquet')
+        env_data = np.load(path / 'env.npy')
+        visualize_experiment(path, inner_log, env_data, verbose)
 
     # Indicate the program completed successfully.
     return 0
@@ -347,7 +351,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description='Generate visualizations of an inner population from single experiment trial.')
     parser.add_argument(
-        'path', type=Path, help='Where to find experiment result data.')
+        'paths', type=Path, help='Where to find experiment result data.', nargs='+')
     parser.add_argument(
         '-v', '--verbose', type=int, default=1,
         help='Verbosity level (1 is default, 0 for no output)')
