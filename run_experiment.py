@@ -17,11 +17,11 @@ import taichi as ti
 from tqdm import trange
 
 from constants import (
-    CARRYING_CAPACITY, DEAD_ID, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
     NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
 from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation
 from outer_population import OuterPopulation
+from outer_fitness import FitnessEvaluator, get_best
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
@@ -61,57 +61,6 @@ def link_best_trial(path, best_index):
         target_is_directory=True)
 
 
-# A flat list of mean HIFF scores sized to fit one value for each location in
-# the environment, used by compute_mean_hiffs and score_populations.
-local_hiff_means = ti.field(float, shape=np.prod(ENVIRONMENT_SHAPE))
-
-@ti.kernel
-def compute_mean_hiffs(inner_population: ti.template(), e: int):
-    g = INNER_GENERATIONS - 1
-    for x, y in ti.ndrange(*ENVIRONMENT_SHAPE):
-        hiff_sum = ti.cast(0, ti.uint32)
-        alive_count = 0
-        for i in range(CARRYING_CAPACITY):
-            individual = inner_population.pop[e, g, x, y, i]
-            if individual.id != DEAD_ID:
-                hiff_sum += individual.hiff
-                alive_count += 1
-        m = x * ENVIRONMENT_SHAPE[1] + y
-        local_hiff_means[m] = ti.select(
-            alive_count > 0, hiff_sum / alive_count, 0.0)
-
-
-def score_populations(inner_population, fitness=None, generation=None):
-    """Score how well the inner populations evolved in this configuration.
-
-    This is used to find the "best" run across multiple trials, and to evolve
-    environments for inner populations to evolve within.
-    """
-    best_index = -1
-    best_score = -1
-    # Unfortunately, the only off-the-shelf sorting algorithm for Taichi only
-    # supports one-dimensional arrays, so score each environment one at a time.
-    for e in range(OUTER_POPULATION_SIZE):
-        # Find the average hiff score for each environment location, then sort
-        # that list and grab the middle value to find the median. We use that
-        # as a proxy for the overall distribution skewing towards a high score.
-        compute_mean_hiffs(inner_population, e)
-        ti.algorithms.parallel_sort(local_hiff_means)
-        score = local_hiff_means[local_hiff_means.shape[0] // 2]
-
-        # If we're tracking fitness scores in a field, store the result there.
-        if fitness is not None and generation is not None:
-            fitness[generation, 0, e] = score
-
-        # Keep track of the highest scoring population of all the ones scored.
-        if score > best_score:
-            best_index = e
-            best_score = score
-
-    # Return the index and score of the best inner population.
-    return best_index, best_score
-
-
 def run_experiment_static_env(env_name, migration, crossover):
     variant_name = get_variant_name(migration, crossover)
     path = OUTPUT_PATH / variant_name / env_name
@@ -137,7 +86,7 @@ def run_experiment_static_env(env_name, migration, crossover):
         (trial_path / 'outer_log.parquet').touch()
 
     # Create a symlink to indicate which trial was the best one.
-    best_index, _ = score_populations(inner_population)
+    best_index, _ = get_best(inner_population)
     link_best_trial(path, best_index)
 
 
@@ -155,9 +104,9 @@ def run_experiment_evolved_env(migration, crossover, verbose):
     # Evolve a population of CPPN environments NUM_TRIALS times.
     outer_population = OuterPopulation()
     inner_population = InnerPopulation(OUTER_POPULATION_SIZE)
+    evaluator = FitnessEvaluator(outer_population)
     best_trial_fitness = -1
     best_trial_index = -1
-    outer_fitness = ti.field(float, OUTER_POPULATION_SIZE)
     for t in range(NUM_TRIALS):
         # Evolve an outer population of environments. For performance reason,
         # this entire loop runs on the GPU with minimal data transfers.
@@ -165,13 +114,13 @@ def run_experiment_evolved_env(migration, crossover, verbose):
         for og in range(OUTER_GENERATIONS):
             environments = outer_population.make_environments()
             inner_population.evolve(environments, migration, crossover)
-            best_env_index, best_env_fitness = score_populations(
-                inner_population, outer_population.matchmaker.fitness, og)
+            evaluator.score_populations(inner_population, og)
             if og + 1 < OUTER_GENERATIONS:
-               outer_population.propagate(og)
+                outer_population.propagate(og)
             tick_progress()
 
         # Track the best evolved environment for all trials.
+        best_env_index, best_env_fitness = evaluator.get_best()
         if best_env_fitness > best_trial_fitness:
             best_trial_fitness = best_env_fitness
             best_trial_index = t

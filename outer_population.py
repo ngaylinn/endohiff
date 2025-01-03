@@ -24,8 +24,10 @@ class OuterPopulation:
         pop_shape = (1, OUTER_POPULATION_SIZE)
 
         # Associate each individual in this population with a single world.
-        index = np.array(
-            list(np.ndindex(1, OUTER_POPULATION_SIZE)), dtype=np.int32)
+        self.index = ti.Vector.field(
+            n=2, dtype=int, shape=OUTER_POPULATION_SIZE)
+        self.index.from_numpy(np.array(
+            list(np.ndindex(1, OUTER_POPULATION_SIZE)), dtype=np.int32))
 
         # We need to NUM_WEIGHTS values (+1 for min fitness) at each position
         # in the environment. That would require a very large CPPN, though, so
@@ -43,7 +45,7 @@ class OuterPopulation:
 
         # The CPPNs used to evolve and render environments.
         self.cppns = CppnPopulation(
-            pop_shape, cppn_shape, index, self.matchmaker)
+            pop_shape, cppn_shape, self.index, self.matchmaker)
 
         # A space to hold the Environments generated using the CPPNs above.
         self.env = Environments(OUTER_POPULATION_SIZE)
