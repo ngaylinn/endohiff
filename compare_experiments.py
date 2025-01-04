@@ -17,8 +17,7 @@ from run_experiment import get_all_trials
 
 def summarize_hiff_scores(inner_log):
     return inner_log.filter(
-        (pl.col('id') > 0) &
-        (pl.col('Generation') == INNER_GENERATIONS - 1)
+        pl.col('alive') & (pl.col('Generation') == INNER_GENERATIONS - 1)
     # Average hiff scores for each location in the
     # environment, so we can analyze relative concentrations
     ).group_by(

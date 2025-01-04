@@ -4,8 +4,8 @@
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, DEAD_ID,
-    MUTATION_MAGNITUDE, TOURNAMENT_SIZE)
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, MUTATION_MAGNITUDE,
+    TOURNAMENT_SIZE)
 
 
 @ti.func
@@ -47,7 +47,7 @@ def tournament_selection(pop, e, g, x, y, min_fitness):
         for i in range(CARRYING_CAPACITY):
             c = (i + offset) % CARRYING_CAPACITY
             competitor = pop[e, g, x, y, c]
-            if competitor.id != DEAD_ID and competitor.fitness > best_fitness:
+            if competitor.is_alive() and competitor.fitness > best_fitness:
                 best_index = c
                 best_fitness = competitor.fitness
 

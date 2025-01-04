@@ -82,8 +82,8 @@ rule all:
 rule evolve_one:
   output:
     expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/inner_log.parquet', t=ALL_TRIALS),
-    expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/outer_log.parquet', t=ALL_TRIALS),
     expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/trial{t}/env.npy', t=ALL_TRIALS),
+    expand('output/migration_{{migration}}_crossover_{{crossover}}/{{env}}/outer_log.parquet'),
   resources: gpu=1 # This process expects to monopolize the GPU.
   params: '{env} {migration} {crossover} -v 0'
   shell: 'python3 run_experiment.py {params}'
@@ -105,7 +105,7 @@ rule visualize_inner:
 
 rule visualize_outer:
   input:
-    expand('output/migration_{{migration}}_crossover_{{crossover}}/cppn/trial{t}/outer_log.parquet', t=ALL_TRIALS),
+    expand('output/migration_{{migration}}_crossover_{{crossover}}/cppn/outer_log.parquet'),
   output:
     expand('output/migration_{{migration}}_crossover_{{crossover}}/cppn/trial{t}/outer_fitness.png', t=ALL_TRIALS),
     'output/migration_{migration}_crossover_{crossover}/cppn/outer_fitness.png',

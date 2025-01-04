@@ -21,7 +21,7 @@ from constants import (
 from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation
 from outer_population import OuterPopulation
-from outer_fitness import FitnessEvaluator, get_best
+from outer_fitness import FitnessEvaluator, get_best_trial
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
@@ -56,6 +56,8 @@ def link_best_trial(path, best_index):
         pass
 
     # Create a symlink to indicate which trial was the best one.
+    # TODO: This doesn't work when copying data across file systems. Find a
+    # better way to track the best trial?
     os.symlink(
         os.path.abspath(path / f'trial{best_index}'), best_trial_link,
         target_is_directory=True)
@@ -72,22 +74,23 @@ def run_experiment_static_env(env_name, migration, crossover):
     inner_population.evolve(environments, migration, crossover)
 
     # Save a full summary for each trial.
-    all_logs = inner_population.get_logs()
-    for t, inner_log in enumerate(all_logs):
+    env_data = environments.to_numpy()
+    for t in range(NUM_TRIALS):
         trial_path = path / f'trial{t}'
         trial_path.mkdir(exist_ok=True, parents=True)
         # Save a copy of the environment with every trial even though it
         # doesn't change, just for consistency with the evolved environment
         # outputs.
-        np.save(trial_path / 'env.npy', environments.to_numpy()[t])
+        np.save(trial_path / 'env.npy', env_data[t])
+        inner_log = inner_population.get_logs(t)
         inner_log.write_parquet(trial_path / 'inner_log.parquet')
-        # Create an empty outer log, just for consistency with the evolved
-        # environment experiments.
-        (trial_path / 'outer_log.parquet').touch()
+
+    # Create an empty outer log, just for consistency with the evolved
+    # environment experiments.
+    (path / 'outer_log.parquet').touch()
 
     # Create a symlink to indicate which trial was the best one.
-    best_index, _ = get_best(inner_population)
-    link_best_trial(path, best_index)
+    link_best_trial(path, get_best_trial(inner_population))
 
 
 def run_experiment_evolved_env(migration, crossover, verbose):
@@ -97,53 +100,46 @@ def run_experiment_evolved_env(migration, crossover, verbose):
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
         print('Evolving environments...')
-        tick_progress = trange(NUM_TRIALS * OUTER_GENERATIONS).update
+        progress = trange(OUTER_GENERATIONS)
     else:
-        tick_progress = lambda: None
+        progress = range(OUTER_GENERATIONS)
 
-    # Evolve a population of CPPN environments NUM_TRIALS times.
-    outer_population = OuterPopulation()
-    inner_population = InnerPopulation(OUTER_POPULATION_SIZE)
+    # Evolve a population of CPPN environments NUM_TRIALS times, and a whole
+    # population of bitstrings within each one.
+    outer_population = OuterPopulation(NUM_TRIALS)
+    inner_population = InnerPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
     evaluator = FitnessEvaluator(outer_population)
-    best_trial_fitness = -1
-    best_trial_index = -1
+
+    # Evolve an outer population of environments. For performance reason,
+    # this entire loop runs on the GPU with minimal data transfers.
+    outer_population.randomize()
+    for og in progress:
+        environments = outer_population.make_environments()
+        inner_population.evolve(environments, migration, crossover)
+        evaluator.score_populations(inner_population, og)
+        if og + 1 < OUTER_GENERATIONS:
+            outer_population.propagate(og)
+
+    # Log the best inner_population from each trial from the last outer
+    # generation (ie, a fully evolved CPPN environment)
+    env_data = environments.to_numpy()
+    best_env_per_trial = evaluator.get_best_per_trial()
     for t in range(NUM_TRIALS):
-        # Evolve an outer population of environments. For performance reason,
-        # this entire loop runs on the GPU with minimal data transfers.
-        outer_population.randomize()
-        for og in range(OUTER_GENERATIONS):
-            environments = outer_population.make_environments()
-            inner_population.evolve(environments, migration, crossover)
-            evaluator.score_populations(inner_population, og)
-            if og + 1 < OUTER_GENERATIONS:
-                outer_population.propagate(og)
-            tick_progress()
-
-        # Track the best evolved environment for all trials.
-        best_env_index, best_env_fitness = evaluator.get_best()
-        if best_env_fitness > best_trial_fitness:
-            best_trial_fitness = best_env_fitness
-            best_trial_index = t
-
-        # Setup the output directory.
         trial_path = path / f'trial{t}'
         trial_path.mkdir(exist_ok=True, parents=True)
 
-        # Save the evolved environment from this trial that produced the best
-        # evolving inner population.
-        np.save(trial_path / 'env.npy', environments.to_numpy()[best_env_index])
-
-        # Save summaries of the final inner population for the best environment
-        # from each trial.
-        inner_log = inner_population.get_logs(best_env_index)
+        # Save the best environment and logs associated with this trial.
+        e = best_env_per_trial[t]
+        np.save(trial_path / 'env.npy', env_data[e])
+        inner_log = inner_population.get_logs(e)
         inner_log.write_parquet(trial_path / 'inner_log.parquet')
 
-        # Save the fitness history for the full outer population in each trial.
-        outer_log = outer_population.get_logs()
-        outer_log.write_parquet(trial_path / 'outer_log.parquet')
+    # Save the full logs for evolving the outer population.
+    outer_log = outer_population.get_logs()
+    outer_log.write_parquet(path / 'outer_log.parquet')
 
     # Create a symlink to indicate which trial was the best one.
-    link_best_trial(path, best_trial_index)
+    link_best_trial(path, evaluator.get_best_trial())
 
 
 def main(env_name, migration, crossover, verbose):

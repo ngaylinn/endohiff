@@ -32,7 +32,7 @@ def chart_hiff_dist(path, inner_log):
         range(ridge_gap - 1, INNER_GENERATIONS, ridge_gap))
     inner_log = inner_log.filter(
         # Looking only at living individuals...
-        (pl.col('id') > 0) &
+        pl.col('alive') &
         # Sample every ten generations...
         (pl.col('Generation').is_in(sample_generations))
     ).group_by(
@@ -180,7 +180,7 @@ def get_masked_column_data(data, column):
     """
     return np.ma.masked_array(
         data.select(column).to_numpy().squeeze(),
-        data.select('id').to_numpy().squeeze() == 0)
+        ~data.select('alive').to_numpy().squeeze())
 
 
 def get_one_frac(arr):
@@ -270,7 +270,7 @@ def save_one_frac_animation(path, inner_log, gif=True):
     """Save a video of a population's ratio of 1s to 0s over one experiment.
     """
     # Grab the data we need and split it by generation.
-    fitness_by_generation = get_masked_column_data(
+    one_frac_by_generation = get_masked_column_data(
         inner_log, 'one_frac'
     ).reshape(INNER_GENERATIONS, -1)
 
@@ -281,11 +281,11 @@ def save_one_frac_animation(path, inner_log, gif=True):
     fig.add_axes(ax)
 
     # Render the first frame, and make an animation for the rest.
-    image = plt.imshow(spatialize_pop_data(fitness_by_generation[0]),
+    image = plt.imshow(spatialize_pop_data(one_frac_by_generation[0]),
                        plt.get_cmap('Spectral').with_extremes(bad='black'))
     plt.clim(0.0, 1.0)
     def animate_func(generation):
-        image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
+        image.set_array(spatialize_pop_data(one_frac_by_generation[generation]))
         return image
     anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
 

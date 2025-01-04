@@ -11,8 +11,8 @@ import polars as pl
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, DEAD_ID,
-    ENVIRONMENT_SHAPE, INNER_GENERATIONS, MIGRATION_RATE, REFILL_RATE)
+    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE,
+    INNER_GENERATIONS, MIGRATION_RATE, REFILL_RATE)
 from hiff import weighted_hiff
 from reproduction import mutation, crossover, tournament_selection
 
@@ -20,24 +20,22 @@ from reproduction import mutation, crossover, tournament_selection
 @ti.dataclass
 class Individual:
     bitstr: BITSTR_DTYPE
-    # Each individual across all generations has a unique identifier. Zero
-    # indicates this individual is not alive.
-    id: ti.uint32
-    # The identifier of the primary parent of this individual. This is either
-    # the only parent (clonal reproduction) or one of two parents whose genes
-    # were combined via crossover. Zero indicates this individual was
-    # spontaneously generated.
-    parent1: ti.uint32
-    # The identifier of the secondary parent of this individual. This is zero
-    # except in the case where crossover was performed.
-    parent2: ti.uint32
     # The fitness score of this individual (weighted HIFF).
     fitness: ti.float32
     # The raw HIFF score of this individual.
     hiff: ti.uint32
 
-# Unoccupied spaces are marked with a DEAD individual (all fields set to 0)
-DEAD = Individual()
+    @ti.func
+    def is_dead(self):
+        return ti.math.isnan(self.fitness)
+
+    @ti.func
+    def is_alive(self):
+        return not self.is_dead()
+
+    @ti.func
+    def mark_dead(self):
+        self.fitness = ti.math.nan
 
 
 @ti.data_oriented
@@ -62,34 +60,22 @@ class InnerPopulation:
             'y': np.tile(np.arange(eh).repeat(cc), ig * ew),
         })
 
-    @ti.func
-    def get_id(self, e, g, x, y, i):
-        ne, ig, ew, eh, cc = self.pop.shape
-        # Return a unique number (>= 1) to identify this individual. The id 0
-        # is reserved to indicate no living individual present.
-        return 1 + i + cc * (y + eh * (x + ew * (g + ig * e)))
-
     @ti.kernel
     def randomize(self):
         # Randomize the population.
         for e, x, y, i in ti.ndrange(*self.shape):
-            self.pop[e, 0, x, y, i] = Individual(
-                bitstr=ti.random(BITSTR_DTYPE),
-                id=self.get_id(e, 0, x, y, i))
+            self.pop[e, 0, x, y, i] = Individual(ti.random(BITSTR_DTYPE))
 
     @ti.kernel
     def evaluate(self, environment: ti.template(), g: ti.i32):
         for e, x, y, i in ti.ndrange(*self.shape):
-            fitness, hiff = ti.cast(0.0, ti.float32), ti.cast(0, ti.uint32)
-
             # Only evaluate fitness of individuals that are alive.
             individual = self.pop[e, g, x, y, i]
-            if individual.id != DEAD_ID:
+            if individual.is_alive():
                 fitness, hiff = weighted_hiff(
                     individual.bitstr, environment.weights[e, x, y])
-
-            self.pop[e, g, x, y, i].fitness = fitness
-            self.pop[e, g, x, y, i].hiff = hiff
+                self.pop[e, g, x, y, i].fitness = fitness
+                self.pop[e, g, x, y, i].hiff = hiff
 
     @ti.kernel
     def migrate(self, g: int):
@@ -113,14 +99,16 @@ class InnerPopulation:
 
                 # If the migrant is more fit than the resident in the location
                 # it's moving to, replace the local and leave an empty space.
-                if migrant.fitness > local.fitness:
+                migrant_is_better = migrant.is_alive() and (
+                    (local.is_dead() or migrant.fitness > local.fitness))
+                if migrant_is_better:
                     # To avoid race conditions, use the next generation as a
                     # scratch space, so this block of threads isn't reading and
                     # writing to the same memory location. After this kernel,
                     # call commit_scratch_space to copy the results back to the
                     # present generation.
                     self.pop[e, g + 1, new_x, new_y, new_i] = migrant
-                    self.pop[e, g, x, y, i] = DEAD
+                    self.pop[e, g, x, y, i].mark_dead()
 
     @ti.kernel
     def refill_empty_spaces(self, g: int):
@@ -128,7 +116,7 @@ class InnerPopulation:
             individual = self.pop[e, g, x, y, i]
 
             # If this spot was unoccupied last generation...
-            if individual.id == DEAD_ID:
+            if individual.is_dead():
                 # Maybe let another individual spawn into this cell.
                 if ti.random() < REFILL_RATE:
                     # Try a few times to find an individual in this location
@@ -138,7 +126,7 @@ class InnerPopulation:
                         new_i = ti.cast(
                             ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
                         individual = self.pop[e, g, x, y, new_i]
-                        if individual.id != DEAD_ID:
+                        if individual.is_alive():
                             # TODO: Sometimes we repeat an id because of this
                             # line. Should we handle this differently? Do we
                             # even need to track ids?
@@ -154,12 +142,12 @@ class InnerPopulation:
     @ti.kernel
     def clear_scratch_space(self, g: int):
         for e, x, y, i in ti.ndrange(*self.shape):
-            self.pop[e, g + 1, x, y, i] = DEAD
+            self.pop[e, g + 1, x, y, i].mark_dead()
 
     @ti.kernel
     def commit_scratch_space(self, g: int):
         for e, x, y, i in ti.ndrange(*self.shape):
-            if self.pop[e, g + 1, x, y, i].id != DEAD_ID:
+            if self.pop[e, g + 1, x, y, i].is_alive():
                 self.pop[e, g, x, y, i] = self.pop[e, g + 1, x, y ,i]
 
     @ti.kernel
@@ -173,15 +161,13 @@ class InnerPopulation:
             # p = tournament_selection(self.pop, g, x, y, min_fitness)
             parent = self.pop[e, g, x, y, i]
 
-            # If no one in this location is fit to reproduce...
-            if parent.id == DEAD_ID or parent.fitness < min_fitness:
+            # If the individual in this location isn't fit to reproduce...
+            if parent.is_dead() or parent.fitness < min_fitness:
                 # Then mark it as dead in the next generation.
-                self.pop[e, g + 1, x, y, i] = DEAD
+                self.pop[e, g + 1, x, y, i].mark_dead()
             else:
                 # Otherwise, make a child from the selected parent.
-                child = Individual(
-                    parent.bitstr, self.get_id(e, g + 1, x, y, i), parent.id
-                )
+                child = Individual(parent.bitstr)
 
                 # Maybe pick a mate and perform crossover
                 if crossover_enabled and ti.random() < CROSSOVER_RATE:
@@ -189,7 +175,6 @@ class InnerPopulation:
                     if m >= 0:
                         mate = self.pop[e, g, x, y, m]
                         child.bitstr = crossover(parent.bitstr, mate.bitstr)
-                        child.parent2 = mate.id
 
                 # Apply mutation to new child
                 child.bitstr ^= mutation()
@@ -220,22 +205,37 @@ class InnerPopulation:
             if generation + 1 < INNER_GENERATIONS:
                 self.propagate(environments, generation, migration, crossover)
 
-    def get_logs(self, env_index=None):
-        def annotate_log_data(log_data, e):
-            return pl.DataFrame({
-                key: field_data[e].flatten()
-                for key, field_data in log_data.items()
-            }).hstack(
-                self.index
-            )
+    # Taichi fields don't support slicing, and the pop field can get to be so
+    # big that the to_numpy() method causes an OOM error! So, unfortunately we
+    # need this awkward kernel to copy just the data we need from the field
+    # into a set of numpy arrays (there's no way to use a single ndarray for a
+    # dataclass like Individual with Taichi, either).
+    @ti.kernel
+    def get_logs_kernel(self, e: int,
+                        bitstr: ti.types.ndarray(),
+                        fitness: ti.types.ndarray(),
+                        hiff: ti.types.ndarray()):
+        ne, ig, ew, eh, cc = self.pop.shape
+        for g, x, y, i in ti.ndrange(ig, ew, eh, cc):
+            individual = self.pop[e, g, x, y, i]
+            bitstr[g, x, y, i] = individual.bitstr
+            fitness[g, x, y, i] = individual.fitness
+            hiff[g, x, y, i] = individual.hiff
 
-        # Return either the inner logs from a single environment, or a list of
-        # logs from each environment.
-        log_data = self.pop.to_numpy()
-        if env_index is not None:
-            return annotate_log_data(log_data, env_index)
-        else:
-            return [
-                annotate_log_data(log_data, e)
-                for e in range(self.num_environments)
-            ]
+    def get_logs(self, env_index):
+        # Grab just the logs we need from the GPU...
+        shape = self.pop.shape[1:]
+        bitstr = np.zeros(shape, dtype=np.uint64)
+        fitness = np.zeros(shape, dtype=np.float32)
+        hiff = np.zeros(shape, dtype=np.uint32)
+        self.get_logs_kernel(env_index, bitstr, fitness, hiff)
+
+        # Make a data frame and annotate it with the premade index.
+        return pl.DataFrame({
+            'bitstr': bitstr.flatten(),
+            'fitness': fitness.flatten(),
+            'hiff': hiff.flatten(),
+            'alive': ~np.isnan(fitness.flatten())
+        }).hstack(
+            self.index
+        )

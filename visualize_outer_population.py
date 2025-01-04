@@ -12,9 +12,11 @@ from tqdm import trange
 
 from constants import NUM_TRIALS
 
+
 def chart_outer_fitness(data, path, hue=None, suffix=''):
     sns.relplot(data=data, x='Generation', y='Fitness', kind='line', hue=hue)
     plt.savefig(path / f'outer_fitness{suffix}.png', dpi=600)
+
 
 def main(path, verbose):
     # Maybe show a progress bar as we generate files.
@@ -24,20 +26,19 @@ def main(path, verbose):
     else:
         tick_progress = lambda: None
 
+    all_data = pl.read_parquet(path / 'outer_log.parquet')
+
     # Load and chart data for each trial separately.
-    frames = []
     for t in range(NUM_TRIALS):
         trial_path = path / f'trial{t}'
-        trial_data = pl.read_parquet( trial_path / 'outer_log.parquet')
+        trial_data = all_data.filter(pl.col('Trial') == t)
         chart_outer_fitness(trial_data, trial_path)
         tick_progress()
-        frames.append(trial_data.with_columns(trial=t))
 
     # Chart data from all trials, both aggregated and broken down by trial.
-    all_data = pl.concat(frames)
     chart_outer_fitness(all_data, path)
     tick_progress()
-    chart_outer_fitness(all_data, path, hue='trial', suffix='_by_trial')
+    chart_outer_fitness(all_data, path, hue='Trial', suffix='_by_trial')
     tick_progress()
 
     # Indicate the program completed successfully.

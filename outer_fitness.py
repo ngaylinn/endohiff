@@ -5,84 +5,95 @@ inner population to solve hiff?" All computation happens on the GPU, and
 eventually multiple different fitness criteria will be supported.
 """
 
+import numpy as np
 import taichi as ti
 
 from constants import (
-    CARRYING_CAPACITY, DEAD_ID, ENVIRONMENT_SHAPE, INNER_GENERATIONS,
+    CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, NUM_TRIALS,
     OUTER_GENERATIONS)
 
 
 @ti.data_oriented
 class FitnessEvaluator:
-    def __init__(self, outer_population, num_environments=None):
-        # We want to use the same fitness criteria for evolving an inner
-        # population in a static environment or within an outer population of
-        # evolved environments. This means both need to happen on the GPU, but
-        # we need to allocate a field for the results if there wasn't a
-        # matchmaker already allocated for the outer population.
+    def __init__(self, outer_population):
+        # If there is no outer population, then assume we've got NUM_TRIALS
+        # inner_populations to work with and set up some fields that can play
+        # the same role as the index and matchmaker in an outer population.
         if outer_population is None:
-            self.use_matchmaker = False
-            assert isinstance(num_environments, int)
-            self.num_environments = num_environments
-            self.fitness = ti.field(float, num_environments)
+            self.fitness = ti.field(float, shape=(1, NUM_TRIALS, 1))
+            self.index = ti.Vector.field(n=2, dtype=int, shape=NUM_TRIALS)
+            self.index.from_numpy(np.array(
+                list(np.ndindex(NUM_TRIALS, 1)), dtype=np.int32))
+            self.last_og = 0
         else:
-            self.use_matchmaker = True
-            self.num_environments = outer_population.index.shape[0]
-            self.outer_population = outer_population
+            self.fitness = outer_population.matchmaker.fitness
+            self.index = outer_population.index
+            self.last_og = OUTER_GENERATIONS - 1
+        self.num_environments = self.index.shape[0]
 
     @ti.func
     def inc_fitness(self, e, og, fitness):
-        if ti.static(self.use_matchmaker):
-            sp, i = self.outer_population.index[e]
-            self.outer_population.matchmaker.fitness[og, sp, i] += fitness
-        else:
-            self.fitness[e] += fitness
+        # Look up the trial and trial-relative index of the given environment.
+        t, i = self.index[e]
+        self.fitness[og, t, i] += fitness
 
     @ti.func
     def get_fitness(self, e, og):
-        if ti.static(self.use_matchmaker):
-            sp, i = self.outer_population.index[e]
-            return self.outer_population.matchmaker.fitness[og, sp, i]
-        else:
-            return self.fitness[e]
+        # Look up the trial and trial-relative index of the given environment.
+        t, i = self.index[e]
+        return self.fitness[og, t, i]
 
     @ti.kernel
     def score_populations(self, inner_population: ti.template(), og: int):
         ig = INNER_GENERATIONS - 1
         shape = (self.num_environments,) + ENVIRONMENT_SHAPE
+        # For every location in every environment across all trials...
         for e, x, y in ti.ndrange(*shape):
             hiff_sum = ti.cast(0, ti.uint32)
             alive_count = 0
             for i in range(CARRYING_CAPACITY):
                 individual = inner_population.pop[e, ig, x, y, i]
-                if individual.id != DEAD_ID:
+                if individual.is_alive():
                     hiff_sum += individual.hiff
                     alive_count += 1
             mean_hiff = ti.select(alive_count > 0, hiff_sum / alive_count, 0.0)
             self.inc_fitness(e, og, mean_hiff ** 2)
 
     @ti.kernel
-    def get_best_kernel(self) -> ti.math.vec2:
-        og = OUTER_GENERATIONS - 1
+    def get_best_per_trial(self) -> ti.types.vector(n=NUM_TRIALS, dtype=int):
+        best_index = ti.Vector([-1] * NUM_TRIALS)
+        best_fitness = ti.Vector([-1.0] * NUM_TRIALS)
+        for e in range(self.num_environments):
+            t = self.index[e][0]
+            fitness = self.get_fitness(e, self.last_og)
+            # Set the max fitness for this trial in a thread-safe way, then
+            # check to see if this was the thread that won and store the
+            # associated index if so.
+            ti.atomic_max(best_fitness[t], fitness)
+            if fitness == best_fitness[t]:
+                best_index[t] = e
+        return best_index
+
+    @ti.kernel
+    def get_best_trial(self) -> int:
         best_index = -1
         best_fitness = -1.0
         for e in range(self.num_environments):
-            fitness = self.get_fitness(e, og)
-            if fitness > best_fitness:
-                best_fitness = fitness
+            fitness = self.get_fitness(e, self.last_og)
+            # Set the max fitness in a thread-safe way, then check to see if
+            # this was the thread that won and store the associated index if
+            # so.
+            ti.atomic_max(best_fitness, fitness)
+            if fitness == best_fitness:
                 best_index = e
-        return ti.Vector([float(best_index), best_fitness])
 
-    def get_best(self):
-        best_index, best_fitness = self.get_best_kernel()
-        return int(best_index), best_fitness
+        # Look up the trial corresponding to the best environment of all.
+        return self.index[best_index][0]
 
 
-def get_best(inner_population):
+def get_best_trial(inner_population):
     """A utility for quickly scoring an inner_population without an outer one.
     """
-    evaluator = FitnessEvaluator(
-        outer_population=None,
-        num_environments=inner_population.num_environments)
-    evaluator.score_populations(inner_population, -1)
-    return evaluator.get_best()
+    evaluator = FitnessEvaluator(None)
+    evaluator.score_populations(inner_population, 0)
+    return evaluator.get_best_trial()

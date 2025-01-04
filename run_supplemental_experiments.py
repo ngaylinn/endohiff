@@ -84,8 +84,7 @@ def baym_variants(verbose):
         logs['baym'].with_columns(environment=pl.lit('baym')),
         logs['stretched'].with_columns(environment=pl.lit('stretched'))
     )).filter(
-        (pl.col('id') > 0) &
-        (pl.col('Generation') == INNER_GENERATIONS - 1)
+        pl.col('alive') & (pl.col('Generation') == INNER_GENERATIONS - 1)
     ).group_by(
         'environment', 'x', 'y'
     ).agg(
@@ -128,8 +127,7 @@ def selection_pressure(verbose):
         logs['baym'].with_columns(environment=pl.lit('baym')),
         logs['flat'].with_columns(environment=pl.lit('flat'))
     )).filter(
-        (pl.col('id') > 0) &
-        (pl.col('Generation') == INNER_GENERATIONS - 1)
+        pl.col('alive') & (pl.col('Generation') == INNER_GENERATIONS - 1)
     ).group_by(
         'environment', 'x', 'y'
     ).agg(
