@@ -24,11 +24,9 @@ class FitnessEvaluator:
             self.index = ti.Vector.field(n=2, dtype=int, shape=NUM_TRIALS)
             self.index.from_numpy(np.array(
                 list(np.ndindex(NUM_TRIALS, 1)), dtype=np.int32))
-            self.last_og = 0
         else:
             self.fitness = outer_population.matchmaker.fitness
             self.index = outer_population.index
-            self.last_og = OUTER_GENERATIONS - 1
         self.num_environments = self.index.shape[0]
 
     @ti.func
@@ -57,15 +55,15 @@ class FitnessEvaluator:
                     hiff_sum += individual.hiff
                     alive_count += 1
             mean_hiff = ti.select(alive_count > 0, hiff_sum / alive_count, 0.0)
-            self.inc_fitness(e, og, mean_hiff ** 2)
+            self.inc_fitness(e, og, mean_hiff)
 
     @ti.kernel
-    def get_best_per_trial(self) -> ti.types.vector(n=NUM_TRIALS, dtype=int):
+    def get_best_per_trial(self, og: int) -> ti.types.vector(n=NUM_TRIALS, dtype=int):
         best_index = ti.Vector([-1] * NUM_TRIALS)
         best_fitness = ti.Vector([-1.0] * NUM_TRIALS)
         for e in range(self.num_environments):
             t = self.index[e][0]
-            fitness = self.get_fitness(e, self.last_og)
+            fitness = self.get_fitness(e, og)
             # Set the max fitness for this trial in a thread-safe way, then
             # check to see if this was the thread that won and store the
             # associated index if so.
@@ -75,11 +73,11 @@ class FitnessEvaluator:
         return best_index
 
     @ti.kernel
-    def get_best_trial(self) -> int:
+    def get_best_trial(self, og: int) -> int:
         best_index = -1
         best_fitness = -1.0
         for e in range(self.num_environments):
-            fitness = self.get_fitness(e, self.last_og)
+            fitness = self.get_fitness(e, og)
             # Set the max fitness in a thread-safe way, then check to see if
             # this was the thread that won and store the associated index if
             # so.
@@ -96,4 +94,4 @@ def get_best_trial(inner_population):
     """
     evaluator = FitnessEvaluator(None)
     evaluator.score_populations(inner_population, 0)
-    return evaluator.get_best_trial()
+    return evaluator.get_best_trial(0)

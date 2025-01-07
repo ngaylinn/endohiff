@@ -123,7 +123,7 @@ def run_experiment_evolved_env(migration, crossover, verbose):
     # Log the best inner_population from each trial from the last outer
     # generation (ie, a fully evolved CPPN environment)
     env_data = environments.to_numpy()
-    best_env_per_trial = evaluator.get_best_per_trial()
+    best_env_per_trial = evaluator.get_best_per_trial(og)
     for t in range(NUM_TRIALS):
         trial_path = path / f'trial{t}'
         trial_path.mkdir(exist_ok=True, parents=True)
@@ -139,7 +139,7 @@ def run_experiment_evolved_env(migration, crossover, verbose):
     outer_log.write_parquet(path / 'outer_log.parquet')
 
     # Create a symlink to indicate which trial was the best one.
-    link_best_trial(path, evaluator.get_best_trial())
+    link_best_trial(path, evaluator.get_best_trial(og))
 
 
 def main(env_name, migration, crossover, verbose):

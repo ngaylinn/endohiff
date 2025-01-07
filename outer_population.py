@@ -59,7 +59,9 @@ class OuterPopulation:
     def propagate(self, generation):
         # NOTE: make sure to set fitness scores in self.matchmaker.fitness
         # before calling this method!
-        self.cppns.propagate(generation)
+        # We use a very high mutation rate to increase diversity in the
+        # population.
+        self.cppns.propagate(generation, mutation_rate=0.1)
 
     @ti.kernel
     def render_environments(self):
@@ -158,6 +160,19 @@ class OuterPopulation:
             'mate': mates,
         })
 
+    def visualize(self, path, trial=None):
+        """Save a map for each environment in this population.
+        """
+        # TODO: This is painfully slow. If using this often, maybe consider
+        # optimizing the map rendering?
+        environments = self.env.to_numpy()
+        for e, env in enumerate(environments):
+            # If a trial was specified, skip enviornments NOT from that trial.
+            if trial is not None and self.index[e][0] != trial:
+                continue
+            path.mkdir(exist_ok=True, parents=True)
+            save_env_map(path, env, f'cppn{e}')
+
 
 # A demo to visualize what a random initial population of CPPNs looks like.
 if __name__ == '__main__':
@@ -165,8 +180,5 @@ if __name__ == '__main__':
 
     outer_population = OuterPopulation()
     outer_population.randomize()
-    environments = outer_population.make_environments().to_numpy()
-    for e, env in enumerate(environments):
-        path = OUTPUT_PATH / 'random_cppn_environments'
-        path.mkdir(exist_ok=True, parents=True)
-        save_env_map(path, env, f'cppn{e}')
+    outer_population.make_environments()
+    outer_population.visualize(OUTPUT_PATH / 'random_cppn_environments')
