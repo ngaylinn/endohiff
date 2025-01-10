@@ -21,7 +21,7 @@ from constants import (
 from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation
 from outer_population import OuterPopulation
-from outer_fitness import FitnessEvaluator, get_best_trial
+from outer_fitness import FitnessCriteria, FitnessEvaluator, get_best_trial
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
@@ -93,9 +93,22 @@ def run_experiment_static_env(env_name, migration, crossover):
     link_best_trial(path, get_best_trial(inner_population))
 
 
-def run_experiment_evolved_env(migration, crossover, verbose):
+def run_experiment_evolved_env(migration, crossover, criteria,
+                               use_weights, verbose):
     variant_name = get_variant_name(migration, crossover)
-    path = OUTPUT_PATH / variant_name / 'cppn'
+
+    # For now, we've got two kinds of CPPN experiments, using the "default"
+    # configuration, and exploring many variations of that theme. Check which
+    # we're doing based on the arguments, and set the output filename
+    # accordingly.
+    if use_weights is None or criteria is None:
+        use_weights = False
+        criteria = FitnessCriteria.ANY
+        suffix = ''
+    else:
+        criteria = FitnessCriteria[criteria.upper()]
+        suffix = f'_{use_weights}_{criteria.name.lower()}'
+    path = OUTPUT_PATH / variant_name / f'cppn{suffix}'
 
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
@@ -106,9 +119,9 @@ def run_experiment_evolved_env(migration, crossover, verbose):
 
     # Evolve a population of CPPN environments NUM_TRIALS times, and a whole
     # population of bitstrings within each one.
-    outer_population = OuterPopulation(NUM_TRIALS)
+    outer_population = OuterPopulation(NUM_TRIALS, use_weights)
     inner_population = InnerPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
-    evaluator = FitnessEvaluator(outer_population)
+    evaluator = FitnessEvaluator(outer_population, criteria)
 
     # Evolve an outer population of environments. For performance reason,
     # this entire loop runs on the GPU with minimal data transfers.
@@ -142,9 +155,10 @@ def run_experiment_evolved_env(migration, crossover, verbose):
     link_best_trial(path, evaluator.get_best_trial(og))
 
 
-def main(env_name, migration, crossover, verbose):
+def main(env_name, migration, crossover, criteria, use_weights, verbose):
     if env_name == 'cppn':
-        run_experiment_evolved_env(migration, crossover, verbose)
+        run_experiment_evolved_env(
+            migration, crossover, criteria, use_weights, verbose)
     else:
         run_experiment_static_env(env_name, migration, crossover)
 
@@ -155,22 +169,28 @@ def main(env_name, migration, crossover, verbose):
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Run a single experiment and record results.')
+    # NOTE: We use strings instead of bools because that's convenient when
+    # interfacing with Snakemake.
     parser.register('type', 'bool string', lambda s: s == 'True')
     parser.add_argument(
-        'env_name', type=str, help='Which environment to use for this experiment.')
+        'env_name', type=str, choices=ALL_ENVIRONMENT_NAMES,
+        help='Which environment to use for this experiment.')
     parser.add_argument(
-        'migration', type='bool string',
-        help='Whether to enable migration for this experiment (True or False).')
+        'migration', type='bool string', choices=[True, False],
+        help='Whether to enable migration for this experiment.')
     parser.add_argument(
-        'crossover', type='bool string',
-        help='Whether to enable crossover for this experiment (True or False).')
+        'crossover', type='bool string', choices=[True, False],
+        help='Whether to enable crossover for this experiment.')
     parser.add_argument(
-        '-v', '--verbose', type=int, default=1,
-        help='Verbosity level (1 is default, 0 for no output)')
+        '--criteria', type=str, default=None,
+        choices=[criteria.name.lower() for criteria in FitnessCriteria],
+        help='Fitness criteria used when evolving an environment.')
+    parser.add_argument(
+        '--use_weights', type='bool string', default=None, choices=[True, False],
+        help='Whether to use substring weights when evolving an environment.')
+    parser.add_argument(
+        '-v', '--verbose', type=int, default=1, choices=[0, 1],
+        help='Verbosity level (0 for minimal output)')
     args = vars(parser.parse_args())
-
-    # Make sure the specified environment is recognized.
-    if not args['env_name'] in ALL_ENVIRONMENT_NAMES:
-        raise ValueError(f'env_name must be one of: {ALL_ENVIRONMENT_NAMES}')
 
     sys.exit(main(**args))

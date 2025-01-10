@@ -18,7 +18,7 @@ constants.BITSTR_LEN = 2 ** constants.BITSTR_POWER
 constants.NUM_WEIGHTS = constants.BITSTR_LEN - 1
 NUM_VALUES = 2**constants.BITSTR_LEN
 
-from hiff import hiff
+from inner_fitness import hiff
 
 ti.init(ti.cuda)
 

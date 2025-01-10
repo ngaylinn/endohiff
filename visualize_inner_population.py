@@ -183,15 +183,6 @@ def get_masked_column_data(data, column):
         ~data.select('alive').to_numpy().squeeze())
 
 
-def get_one_frac(arr):
-    """Find the ratio of 1s to 0s for each bit string (int) in an array.
-    """
-    one_counts = np.zeros(len(arr))
-    for b in range(BITSTR_LEN):
-        one_counts += (arr >> b) & 1
-    return one_counts / 64
-
-
 def spatialize_pop_data(pop_data):
     """Transform raw population data from logs into a spatial layout to render.
 
@@ -225,7 +216,7 @@ def save_one_frac_map(path, inner_log):
     """Render a static map of a population's ratio of 1s to 0s.
     """
     plt.figure(figsize=(8, 4.5))
-    pop_data = get_masked_column_data(inner_log, 'one_frac')
+    pop_data = get_masked_column_data(inner_log, 'one_count') / BITSTR_LEN
     plt.imshow(spatialize_pop_data(pop_data),
                cmap=plt.get_cmap('Spectral').with_extremes(bad='black'))
     plt.clim(0.0, 1.0)
@@ -271,8 +262,8 @@ def save_one_frac_animation(path, inner_log, gif=True):
     """
     # Grab the data we need and split it by generation.
     one_frac_by_generation = get_masked_column_data(
-        inner_log, 'one_frac'
-    ).reshape(INNER_GENERATIONS, -1)
+        inner_log, 'one_count'
+    ).reshape(INNER_GENERATIONS, -1) / BITSTR_LEN
 
     # Set up a figure with no decorations or padding.
     fig = plt.figure(frameon=False, figsize=(16, 9))
@@ -305,10 +296,6 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
         tick_progress = trange(num_artifacts).update
     else:
         tick_progress = lambda: None
-
-    inner_log = inner_log.with_columns(
-        one_frac=get_one_frac(inner_log['bitstr'].to_numpy())
-    )
 
     save_one_frac_animation(path, inner_log)
     tick_progress()

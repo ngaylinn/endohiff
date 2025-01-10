@@ -15,9 +15,9 @@ from visualize_inner_population import save_env_map
 
 @ti.data_oriented
 class OuterPopulation:
-    def __init__(self, count=1):
+    def __init__(self, count=1, use_weights=False):
         # Whether or not to evolve substring weights in the environment.
-        self.use_weights = False
+        self.use_weights = use_weights
 
         # We will evolve count populations of OUTER_POPULATION_SIZE each, so
         # the number of environments is just the product of those two values.
@@ -178,7 +178,14 @@ class OuterPopulation:
 if __name__ == '__main__':
     ti.init(ti.cuda, unrolling_limit=0)
 
-    outer_population = OuterPopulation()
+    outer_population = OuterPopulation(use_weights=False)
     outer_population.randomize()
     outer_population.make_environments()
-    outer_population.visualize(OUTPUT_PATH / 'random_cppn_environments')
+    outer_population.visualize(
+        OUTPUT_PATH / 'random_cppn_environments_without_weights')
+
+    outer_population = OuterPopulation(use_weights=True)
+    outer_population.randomize()
+    outer_population.make_environments()
+    outer_population.visualize(
+        OUTPUT_PATH / 'random_cppn_environments_with_weights')

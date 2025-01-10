@@ -13,7 +13,7 @@ import taichi as ti
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE,
     INNER_GENERATIONS, MIGRATION_RATE, REFILL_RATE)
-from hiff import weighted_hiff
+from inner_fitness import weighted_hiff, count_ones
 from reproduction import mutation, crossover, tournament_selection
 
 
@@ -23,7 +23,9 @@ class Individual:
     # The fitness score of this individual (weighted HIFF).
     fitness: ti.float32
     # The raw HIFF score of this individual.
-    hiff: ti.uint32
+    hiff: ti.int16
+    # How many ones are in the bitstr.
+    one_count: ti.int8
 
     @ti.func
     def is_dead(self):
@@ -74,8 +76,10 @@ class InnerPopulation:
             if individual.is_alive():
                 fitness, hiff = weighted_hiff(
                     individual.bitstr, environment.weights[e, x, y])
-                self.pop[e, g, x, y, i].fitness = fitness
-                self.pop[e, g, x, y, i].hiff = hiff
+                individual.fitness = fitness
+                individual.hiff = hiff
+                individual.one_count = count_ones(individual.bitstr)
+                self.pop[e, g, x, y, i] = individual
 
     @ti.kernel
     def migrate(self, g: int):
@@ -214,28 +218,32 @@ class InnerPopulation:
     def get_logs_kernel(self, e: int,
                         bitstr: ti.types.ndarray(),
                         fitness: ti.types.ndarray(),
-                        hiff: ti.types.ndarray()):
+                        hiff: ti.types.ndarray(),
+                        one_count: ti.types.ndarray()):
         ne, ig, ew, eh, cc = self.pop.shape
         for g, x, y, i in ti.ndrange(ig, ew, eh, cc):
             individual = self.pop[e, g, x, y, i]
             bitstr[g, x, y, i] = individual.bitstr
             fitness[g, x, y, i] = individual.fitness
             hiff[g, x, y, i] = individual.hiff
+            one_count[g, x, y, i] = individual.one_count
 
     def get_logs(self, env_index):
         # Grab just the logs we need from the GPU...
         shape = self.pop.shape[1:]
         bitstr = np.zeros(shape, dtype=np.uint64)
         fitness = np.zeros(shape, dtype=np.float32)
-        hiff = np.zeros(shape, dtype=np.uint32)
-        self.get_logs_kernel(env_index, bitstr, fitness, hiff)
+        hiff = np.zeros(shape, dtype=np.int16)
+        one_count = np.zeros(shape, dtype=np.uint8)
+        self.get_logs_kernel(env_index, bitstr, fitness, hiff, one_count)
 
         # Make a data frame and annotate it with the premade index.
         return pl.DataFrame({
             'bitstr': bitstr.flatten(),
             'fitness': fitness.flatten(),
+            'alive': ~np.isnan(fitness.flatten()),
             'hiff': hiff.flatten(),
-            'alive': ~np.isnan(fitness.flatten())
+            'one_count': one_count.flatten(),
         }).hstack(
             self.index
         )

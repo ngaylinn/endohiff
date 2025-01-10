@@ -21,9 +21,6 @@ ENVIRONMENT_SHAPE = (64, 36)
 POP_TILE_SIZE = 5
 CARRYING_CAPACITY = POP_TILE_SIZE ** 2
 
-# The id to indicate an empty spot in a population.
-DEAD_ID = 0
-
 # Constants configuring simulated evolution
 CROSSOVER_RATE = 0.5
 # The probability of flipping a bit is 1/(2**MUTATION_MAGNITUDE) ~= 0.016

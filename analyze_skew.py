@@ -8,7 +8,8 @@ import seaborn as sns
 import taichi as ti
 from tqdm import trange
 
-from constants import BITSTR_LEN, CARRYING_CAPACITY, DEAD_ID, ENVIRONMENT_SHAPE, INNER_GENERATIONS
+from constants import (
+    CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from environments import STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation
 
@@ -29,14 +30,6 @@ counts = ti.field(
     ti.int8, (TOTAL_TRIALS,) + ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,))
 
 
-@ti.func
-def count_ones(bitstr):
-    ones = 0
-    for b in range(BITSTR_LEN):
-        ones += int((bitstr >> b) & 1)
-    return ones
-
-
 @ti.kernel
 def update_totals(population: ti.template(), trials_completed: int):
     g = INNER_GENERATIONS - 1
@@ -45,11 +38,10 @@ def update_totals(population: ti.template(), trials_completed: int):
         # Each environment is a distinct trial on top of the ones completed so
         # far, so compute the absolute trial number for this individual.
         t = trials_completed + e
-        if individual.id == DEAD_ID:
+        if individual.is_dead():
             counts[t, x, y, i] = ti.cast(-1, ti.int8)
         else:
-            one_count = count_ones(individual.bitstr)
-            counts[t, x, y, i] = ti.cast(one_count, ti.int8)
+            counts[t, x, y, i] = individual.one_count
 
 
 def evaluate_skew(env, migration, crossover):

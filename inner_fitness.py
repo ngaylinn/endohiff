@@ -1,4 +1,4 @@
-"""Compute HIFF or some variation of HIFF with different substring weights.
+"""Compute metrics on the inner population, like hiff score and one count.
 """
 
 import taichi as ti
@@ -10,7 +10,7 @@ from constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE, NUM_WEIGHTS
 def weighted_hiff(bitstr, weights):
     # The one-bit substrings are "freebies" and automatically count towards the
     # hiff score. Don't use weights for these, since that would be pointless.
-    hiff = ti.cast(BITSTR_LEN, ti.uint32)
+    hiff = ti.cast(BITSTR_LEN, ti.int16)
     fitness = ti.cast(BITSTR_LEN, ti.float32)
 
     # For all the powers of two up to BITSTR_LEN, look at all the substrings of
@@ -28,7 +28,7 @@ def weighted_hiff(bitstr, weights):
             substr = bitstr & substr_mask
             score = substr_len * int(substr == 0 or substr == substr_mask)
             fitness += score * weights[w]
-            hiff += score
+            hiff += ti.cast(score, ti.int16)
 
             # Shift the mask to look at the next substr in order.
             # NOTE: The check here isn't necessary, but without it Taichi's
@@ -51,6 +51,14 @@ def weighted_hiff(bitstr, weights):
 def hiff(bitstr):
     fitness, hiff = weighted_hiff(bitstr, ti.Vector([1.0] * NUM_WEIGHTS))
     return hiff
+
+
+@ti.func
+def count_ones(bitstr):
+    one_count = ti.cast(0, ti.int8)
+    for b in range(BITSTR_LEN):
+        one_count += ti.cast((bitstr >> b) & 1, ti.int8)
+    return one_count
 
 
 @ti.kernel

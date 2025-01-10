@@ -71,8 +71,10 @@ rule all:
     # Supplemental figures
     'output/hiff.png',
     'output/migration.png',
-    expand('output/random_cppn_environments/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
-    expand('output/random_cppn_environments/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_without_weights/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_without_weights/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_with_weights/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_with_weights/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
 
 
 # -----------------------------------------------------------------------------
@@ -157,8 +159,10 @@ rule generate_supplemental_figures:
 
 rule visualize_random_cppn_environments:
   output:
-    expand('output/random_cppn_environments/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
-    expand('output/random_cppn_environments/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_without_weights/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_without_weights/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_with_weights/cppn{e}_weights.png', e=SAMPLE_ENVIRONMENTS),
+    expand('output/random_cppn_environments_with_weights/cppn{e}_fitness.png', e=SAMPLE_ENVIRONMENTS),
   shell: 'python3 outer_population.py'
 
 # -----------------------------------------------------------------------------
