@@ -107,26 +107,23 @@ class FitnessEvaluator:
         # For each environment, look at the counts of bitstrings of different
         # kinds and come up with a single fitness score.
         for e in range(self.num_environments):
-            fitness = 0.0
+            fitness = self.partial_sums[e][BitstrKind.OVERALL.value]
             # Prefer simulations where the dominant solutions are either
             # majority one or majority zero.
             if ti.static(self.goal) == FitnessCriteria.UNIFORM.value:
-                fitness = max(
+                fitness += max(
                     self.partial_sums[e][BitstrKind.MORE_ZEROS.value],
                     self.partial_sums[e][BitstrKind.MORE_ONES.value])
             # Prefer simulations where the dominant solutions are an even mix
             # of majority one or majority zero.
             if ti.static(self.goal) == FitnessCriteria.DIVERSE.value:
-                fitness = min(
+                fitness += min(
                     self.partial_sums[e][BitstrKind.MORE_ZEROS.value],
                     self.partial_sums[e][BitstrKind.MORE_ONES.value])
             # Prefer solutions where the dominant solutions are a mix of ones
             # and zeros.
             if ti.static(self.goal) == FitnessCriteria.MIXED.value:
-                fitness = self.partial_sums[e][BitstrKind.EVEN_SPLIT.value]
-            # Show no preference for ones or zeros, just hiff scores.
-            if ti.static(self.goal) == FitnessCriteria.ANY.value:
-                fitness = self.partial_sums[e][BitstrKind.OVERALL.value]
+                fitness += self.partial_sums[e][BitstrKind.EVEN_SPLIT.value]
             # Actually finalize and store the fitness score.
             self.set_fitness(e, og, fitness)
 
