@@ -105,7 +105,7 @@ def chart_hiff_comparison(data, column, file):
     fig = sns.displot(
         data, x='Mean Hiff', kind='kde', hue=column, aspect=1.33)
     plt.xlim(MIN_HIFF, MAX_HIFF)
-    sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.6, 0.8))
+    sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.7, 0.8))
     fig.set(title=f'Population HIFF Distribution')
     fig.savefig(file, dpi=600)
     plt.close()
