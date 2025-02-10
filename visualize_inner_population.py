@@ -53,22 +53,34 @@ def chart_hiff_dist(path, inner_log):
         'Mean Hiff': 0.0
     })))
 
+    # Add a column indicating the overall average hiff score so we can color
+    # each ridge to match the performance at that time step.
+    inner_log = inner_log.join(
+        inner_log.group_by(
+            'Generation'
+        ).agg(
+            pl.col('Mean Hiff').mean().alias('color')
+        ),
+        on='Generation',
+        how='inner',
+        coalesce=True
+    )
+
     # Set up the ridge plot visualization.
     sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
-    pal = sns.cubehelix_palette(num_ridges, rot=-.25, light=.7)
     grid = sns.FacetGrid(
         inner_log, row='Generation', hue='Generation',
-        aspect=15, height=0.5, palette=pal, xlim=(0, MAX_HIFF))
+        aspect=15, height=0.5, xlim=(0, MAX_HIFF))
 
     # Plot the mean hiff score for each sample generation and label it with the
     # generation number.
-    grid.map(sns.kdeplot, 'Mean Hiff', bw_adjust=1.5,
-             clip_on=True, fill=True, alpha=1.0, warn_singular=False)
-    def label(x, color, label):
+    def plot_ridge(x, color, label):
         ax = plt.gca()
+        color = plt.cm.viridis(x.mean() / MAX_HIFF)
+        sns.kdeplot(x=x, color=color, fill=True)
         ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
                 transform=ax.transAxes)
-    grid.map(label, 'Mean Hiff')
+    grid.map(plot_ridge, 'Mean Hiff')
 
     # Apply styling and save results.
     grid.refline(y=0, linestyle='-', clip_on=False)
