@@ -31,15 +31,15 @@ class FitnessCriteria(Enum):
 
 @ti.data_oriented
 class FitnessEvaluator:
-    def __init__(self, outer_population=None, criteria=FitnessCriteria.ANY):
+    def __init__(self, count=1, outer_population=None, criteria=FitnessCriteria.ANY):
         # If there is no outer population, then assume we've got NUM_TRIALS
         # inner_populations to work with and set up some fields that can play
         # the same role as the index and matchmaker in an outer population.
         if outer_population is None:
-            self.fitness = ti.field(float, shape=(1, NUM_TRIALS, 1))
-            self.index = ti.Vector.field(n=2, dtype=int, shape=NUM_TRIALS)
+            self.fitness = ti.field(float, shape=(1, count, 1))
+            self.index = ti.Vector.field(n=2, dtype=int, shape=count)
             self.index.from_numpy(np.array(
-                list(np.ndindex(NUM_TRIALS, 1)), dtype=np.int32))
+                list(np.ndindex(count, 1)), dtype=np.int32))
         else:
             self.fitness = outer_population.matchmaker.fitness
             self.index = outer_population.index
@@ -167,12 +167,12 @@ class FitnessEvaluator:
 def get_best_trial(inner_population):
     """A utility for quickly scoring an inner_population without an outer one.
     """
-    evaluator = FitnessEvaluator(None)
+    evaluator = FitnessEvaluator(inner_population.shape[0])
     evaluator.score_populations(inner_population, 0)
     return evaluator.get_best_trial(0)
 
 
 def get_per_trial_scores(inner_population):
-    evaluator = FitnessEvaluator(None)
+    evaluator = FitnessEvaluator(inner_population.shape[0])
     evaluator.score_populations(inner_population, 0)
     return evaluator.fitness.to_numpy().flatten()
