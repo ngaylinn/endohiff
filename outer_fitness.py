@@ -170,3 +170,9 @@ def get_best_trial(inner_population):
     evaluator = FitnessEvaluator(None)
     evaluator.score_populations(inner_population, 0)
     return evaluator.get_best_trial(0)
+
+
+def get_per_trial_scores(inner_population):
+    evaluator = FitnessEvaluator(None)
+    evaluator.score_populations(inner_population, 0)
+    return evaluator.fitness.to_numpy().flatten()

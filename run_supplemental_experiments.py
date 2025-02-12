@@ -11,13 +11,12 @@ from compare_experiments import compare_experiments
 
 from constants import INNER_GENERATIONS, OUTPUT_PATH
 from environments import Environments, make_baym, make_flat
-from inner_population import InnerPopulation
+from inner_population import InnerPopulation, get_default_params
 from visualize_inner_population import visualize_experiment
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
 ti.init(ti.cuda, unrolling_limit=0)
-
 
 
 def make_stretched():
@@ -66,8 +65,9 @@ def baym_variants(verbose):
 
     for env_name, make_env in environments.items():
         env = make_env()
+        params = get_default_params()
         inner_population = InnerPopulation()
-        inner_population.evolve(env, True, True)
+        inner_population.evolve(env, params)
         inner_log = inner_population.get_logs(0)
         logs[env_name] = inner_log
 
@@ -109,8 +109,9 @@ def selection_pressure(verbose):
     logs = {}
     for env_name, make_env in environments.items():
         env = make_env()
+        params = get_default_params()
         inner_population = InnerPopulation()
-        inner_population.evolve(env, True, True)
+        inner_population.evolve(env, params)
         inner_log = inner_population.get_logs(0)
         logs[env_name] = inner_log
 

@@ -77,7 +77,7 @@ def chart_hiff_dist(path, inner_log):
     def plot_ridge(x, color, label):
         ax = plt.gca()
         color = plt.cm.viridis(x.mean() / MAX_HIFF)
-        sns.kdeplot(x=x, color=color, fill=True)
+        sns.kdeplot(x=x, color=color, fill=True, warn_singular=False)
         ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
                 transform=ax.transAxes)
     grid.map(plot_ridge, 'Mean Hiff')

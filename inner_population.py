@@ -11,10 +11,28 @@ import polars as pl
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE,
-    INNER_GENERATIONS, MIGRATION_RATE, REFILL_RATE)
+    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from inner_fitness import weighted_hiff, count_ones
 from reproduction import mutation, crossover, tournament_selection
+
+
+@ti.dataclass
+class Params:
+    migration_rate: ti.float16
+    crossover_rate: ti.float16
+    mortality_rate: ti.float16
+    max_fertility: ti.int8
+    tournament_size: ti.int8
+
+
+def get_default_params(shape=1):
+    field = Params.field(shape=shape)
+    field.migration_rate.fill(1.0)
+    field.crossover_rate.fill(0.5)
+    field.mortality_rate.fill(0.0)
+    field.max_fertility.fill(25)
+    field.tournament_size.fill(2)
+    return field
 
 
 @ti.dataclass
@@ -54,6 +72,14 @@ class InnerPopulation:
         # A full population of individuals for all generations.
         self.pop = Individual.field(shape=(ne, ig, ew, eh, cc))
 
+        # Per generation metadata that does not get saved.
+        # Selections lets us pick fit, living individuals from pop and remember
+        # the results as we proceed to modify pop.
+        self.selections = ti.field(int, shape=(ne, ew, eh, cc))
+        # How many children were produced from each individual in the
+        # population, used to enforce a maximum count.
+        self.num_children = ti.field(int, shape=(ne, ew, eh, cc))
+
         # An index with positional metadata for each Individual in self.pop,
         # used to generate annotated log files.
         self.index = pl.DataFrame({
@@ -69,7 +95,7 @@ class InnerPopulation:
             self.pop[e, 0, x, y, i] = Individual(ti.random(BITSTR_DTYPE))
 
     @ti.kernel
-    def evaluate(self, environment: ti.template(), g: ti.i32):
+    def evaluate(self, g: ti.i32, environment: ti.template()):
         for e, x, y, i in ti.ndrange(*self.shape):
             # Only evaluate fitness of individuals that are alive.
             individual = self.pop[e, g, x, y, i]
@@ -82,132 +108,118 @@ class InnerPopulation:
                 self.pop[e, g, x, y, i] = individual
 
     @ti.kernel
-    def migrate(self, g: int):
-        # Migrants replace local individuals only if they have a higher fitness
-        # than the current inhabitant. This ensures that more fit individuals
-        # are prioritized for migration.
-        for e, x, y, i in ti.ndrange(*self.shape):
-            dx = ti.round(MIGRATION_RATE * ti.randn())
-            dy = ti.round(MIGRATION_RATE * ti.randn())
-
-            # Find the target location to migrate to.
-            new_x = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0] - 1))
-            new_y = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1] - 1))
-            # NOTE: Careful typing to satisfy Taichi'a debugger.
-            new_i = ti.cast(ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
-
-            # If this individual is moving to a new location...
-            if new_x != x or new_y != y:
-                migrant = self.pop[e, g, x, y, i]
-                local = self.pop[e, g, new_x, new_y, new_i]
-
-                # If the migrant is more fit than the resident in the location
-                # it's moving to, replace the local and leave an empty space.
-                migrant_is_better = migrant.is_alive() and (
-                    (local.is_dead() or migrant.fitness > local.fitness))
-                if migrant_is_better:
-                    # To avoid race conditions, use the next generation as a
-                    # scratch space, so this block of threads isn't reading and
-                    # writing to the same memory location. After this kernel,
-                    # call commit_scratch_space to copy the results back to the
-                    # present generation.
-                    self.pop[e, g + 1, new_x, new_y, new_i] = migrant
-                    self.pop[e, g, x, y, i].mark_dead()
-
-    @ti.kernel
-    def refill_empty_spaces(self, g: int):
+    def cull(self, g: int, environment: ti.template(), params: ti.template()):
         for e, x, y, i in ti.ndrange(*self.shape):
             individual = self.pop[e, g, x, y, i]
-
-            # If this spot was unoccupied last generation...
-            if individual.is_dead():
-                # Maybe let another individual spawn into this cell.
-                if ti.random() < REFILL_RATE:
-                    # Try a few times to find an individual in this location
-                    # that's not dead, and let them take over the empty spot.
-                    for _ in range(4):
-                        # NOTE: Careful typing to satisfy Taichi'a debugger.
-                        new_i = ti.cast(
-                            ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
-                        individual = self.pop[e, g, x, y, new_i]
-                        if individual.is_alive():
-                            # TODO: Sometimes we repeat an id because of this
-                            # line. Should we handle this differently? Do we
-                            # even need to track ids?
-                            # To avoid race conditions, use the next generation
-                            # as a scratch space, so this block of threads
-                            # isn't reading and writing to the same memory
-                            # location. After this kernel, call
-                            # commit_scratch_space to copy the results back to
-                            # the present generation.
-                            self.pop[e, g + 1, x, y, i] = individual
-                            break
-
-    @ti.kernel
-    def clear_scratch_space(self, g: int):
-        for e, x, y, i in ti.ndrange(*self.shape):
-            self.pop[e, g + 1, x, y, i].mark_dead()
-
-    @ti.kernel
-    def commit_scratch_space(self, g: int):
-        for e, x, y, i in ti.ndrange(*self.shape):
-            if self.pop[e, g + 1, x, y, i].is_alive():
-                self.pop[e, g, x, y, i] = self.pop[e, g + 1, x, y ,i]
-
-    @ti.kernel
-    def populate_children(self, environment: ti.template(), g: int, crossover_enabled: bool):
-        for e, x, y, i in ti.ndrange(*self.shape):
             min_fitness = environment.min_fitness[e, x, y]
-            # TODO: Without selection here, there's a big difference between
-            # baym and flat, but that's because flat is basically just doing a
-            # random search, not hill-climbing! If I do selection here, then
-            # the effect dissappears. Is there a happy-medium?
-            # p = tournament_selection(self.pop, g, x, y, min_fitness)
-            parent = self.pop[e, g, x, y, i]
-
-            # If the individual in this location isn't fit to reproduce...
-            if parent.is_dead() or parent.fitness < min_fitness:
-                # Then mark it as dead in the next generation.
+            unfit = individual.is_dead() or individual.fitness < min_fitness
+            unlucky = ti.random() < params[e].mortality_rate
+            # Update the next generation to indicate which individuals from
+            # this generation survived.
+            if unfit or unlucky:
                 self.pop[e, g + 1, x, y, i].mark_dead()
             else:
-                # Otherwise, make a child from the selected parent.
-                child = Individual(parent.bitstr)
+                self.pop[e, g + 1, x, y, i] = individual
 
-                # Maybe pick a mate and perform crossover
-                if crossover_enabled and ti.random() < CROSSOVER_RATE:
-                    m = tournament_selection(self.pop, e, g, x, y, min_fitness)
-                    if m >= 0:
-                        mate = self.pop[e, g, x, y, m]
-                        child.bitstr = crossover(parent.bitstr, mate.bitstr)
+    @ti.kernel
+    def select(self, g: int, params: ti.template()):
+        for e, x, y, i in ti.ndrange(*self.shape):
+            # For each unit of carrying capacity, use tournament selection to
+            # find one alive and relatively fit individual who is vying for
+            # that carrying capacity. They might try to mate with whoever's
+            # already there, or reproduce into that spot themselves there if
+            # it's vacant. Note, we do selection on generation g+1 because
+            # that's how we know who survived the cull() operation, but we
+            # should look at generation g to find those individuals, since g+1
+            # will hold their children, which will be mutated.
+            self.selections[e, x, y, i] = tournament_selection(
+                self.pop, e, g + 1, x, y, params[e].tournament_size)
+            # Count how many children each individual has in the current
+            # generation, so we can enforce a maximum number.
+            self.num_children[e, x, y, i] = 0
 
-                # Apply mutation to new child
-                child.bitstr ^= mutation()
+    @ti.func
+    def get_child(self, parent, e, g, x, y, i, m, params):
+        # Add one to the children so far, using atomic add to ensure thread
+        # safety. The return value is unique to each thread.
+        num_children = ti.atomic_add(self.num_children[e, x, y, i], 1)
+        child = Individual()
+        # If this parent hasn't had too many already, generate a new child.
+        if num_children + 1 < params[e].max_fertility:
+            # Do crossover if a mate index was specified.
+            if m >= 0:
+                # Lookup the mate from generation g to populate a child in
+                # generation g+1.
+                mate = self.pop[e, g, x, y, m]
+                child.bitstr = crossover(parent.bitstr, mate.bitstr)
+            else:
+                child.bitstr = parent.bitstr
+            child.bitstr ^= mutation()
+        # Otherwise, return a NULL child.
+        else:
+            child.mark_dead()
+        return child
 
-                # Place the child in the next generation
+    @ti.kernel
+    def reproduce(self, g: int, params: ti.template()):
+        for e, x, y, i in ti.ndrange(*self.shape):
+            # If there should be a living individual here at generation g+1
+            if self.pop[e, g + 1, x, y, i].is_alive():
+                # Then lookup the parent from generation g
+                parent = self.pop[e, g, x, y, i]
+                # Maybe use a mate for crossover.
+                m = -1
+                if ti.random() < params[e].crossover_rate:
+                    m = self.selections[e, x, y, i]
+                # Generate a child and populate them into this location in g+1.
+                child = self.get_child(parent, e, g, x, y, i, m, params)
                 self.pop[e, g + 1, x, y, i] = child
 
-    def propagate(self, environment, generation, migrate_enabled, crossover_enabled):
-        # TODO: Find a better way to do this! Using the next generation as a
-        # scractch space like this is ugly and inefficient, but it was a
-        # simple way to fix a race condition. When redesigning the propagation
-        # process, redesign this code to be more streamlined.
-        self.clear_scratch_space(generation)
-        if migrate_enabled:
-            self.migrate(generation)
-        self.commit_scratch_space(generation)
+    @ti.kernel
+    def spread(self, g: int, params: ti.template()):
+        for e, x, y, i in ti.ndrange(*self.shape):
+            # If this location would be empty at generation g+1, try to fill it.
+            if self.pop[e, g + 1, x, y, i].is_dead():
+                # Find the location of the parent who may produce a child here.
+                # By default, we draw a parent from this current location.
+                px, py = x, y
 
-        self.clear_scratch_space(generation)
-        self.refill_empty_spaces(generation)
-        self.commit_scratch_space(generation)
+                # If we're migration is enabled, consider taking a parent from a
+                # nearby location instead.
+                dx = ti.round(params[e].migration_rate * ti.randn())
+                dy = ti.round(params[e].migration_rate * ti.randn())
+                if dx != 0 or dy != 0:
+                    px = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0] - 1))
+                    py = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1] - 1))
 
-        self.populate_children(environment, generation, crossover_enabled)
+                # Lookup a selected individual from the chosen location in the
+                # previous generation, if there was any.
+                pi = self.selections[e, px, py, i]
+                if pi > -1:
+                    # Generate a child and place it into generation g+1.
+                    parent = self.pop[e, g, px, py, pi]
+                    child = self.get_child(parent, e, g, px, py, pi, -1, params)
+                    self.pop[e, g + 1, x, y, i] = child
 
-    def evolve(self, environments, migration, crossover):
+    def evolve(self, environments, params):
         self.randomize()
         for generation in range(INNER_GENERATIONS):
-            self.evaluate(environments, generation)
+            # Look at all the bitstrings and determine their fitness, given
+            # their local environmental conditions.
+            self.evaluate(generation, environments)
             if generation + 1 < INNER_GENERATIONS:
-                self.propagate(environments, generation, migration, crossover)
+                # Look at individuals in the current generation, see who lives,
+                # and indicate that in the population in the next generation.
+                self.cull(generation, environments, params)
+                # Select fitter individuals from the ones that survived using
+                # tournament selection.
+                self.select(generation, params)
+                # Individuals that survived replace themselves with children,
+                # possibly crossing over with a selected mate.
+                self.reproduce(generation, params)
+                # Empty spaces may get refilled by fit individuals in this or
+                # nearby locations producing additional children.
+                self.spread(generation, params)
 
     # Taichi fields don't support slicing, and the pop field can get to be so
     # big that the to_numpy() method causes an OOM error! So, unfortunately we

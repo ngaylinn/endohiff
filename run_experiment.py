@@ -19,7 +19,7 @@ from tqdm import trange
 from constants import (
     NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
 from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
-from inner_population import InnerPopulation
+from inner_population import InnerPopulation, get_default_params
 from outer_population import OuterPopulation
 from outer_fitness import FitnessCriteria, FitnessEvaluator, get_best_trial
 
@@ -67,11 +67,18 @@ def run_experiment_static_env(env_name, migration, crossover):
     variant_name = get_variant_name(migration, crossover)
     path = OUTPUT_PATH / variant_name / env_name
 
+    # Set up environments and parameters for the InnerPopulation.
+    environments = STATIC_ENVIRONMENTS[env_name](NUM_TRIALS)
+    params = get_default_params(NUM_TRIALS)
+    if not migration:
+        params.migration_rate.fill(0.0)
+    if not crossover:
+        params.crossover_rate.fill(0.0)
+
     # Evolve a population of bitstrings in a static environment NUM_TRIALS
     # times, in parallel.
-    environments = STATIC_ENVIRONMENTS[env_name](NUM_TRIALS)
     inner_population = InnerPopulation(NUM_TRIALS)
-    inner_population.evolve(environments, migration, crossover)
+    inner_population.evolve(environments, params)
 
     # Save a full summary for each trial.
     env_data = environments.to_numpy()
@@ -117,6 +124,13 @@ def run_experiment_evolved_env(migration, crossover, criteria,
     else:
         progress = range(OUTER_GENERATIONS)
 
+    # Set up parameters for the InnerPopulation.
+    params = get_default_params(NUM_TRIALS)
+    if not migration:
+        params.migration_rate.fill(0.0)
+    if not crossover:
+        params.crossover_rate.fill(0.0)
+
     # Evolve a population of CPPN environments NUM_TRIALS times, and a whole
     # population of bitstrings within each one.
     outer_population = OuterPopulation(NUM_TRIALS, use_weights)
@@ -128,7 +142,7 @@ def run_experiment_evolved_env(migration, crossover, criteria,
     outer_population.randomize()
     for og in progress:
         environments = outer_population.make_environments()
-        inner_population.evolve(environments, migration, crossover)
+        inner_population.evolve(environments, params)
         evaluator.score_populations(inner_population, og)
         if og + 1 < OUTER_GENERATIONS:
             outer_population.propagate(og)
