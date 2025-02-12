@@ -1,5 +1,6 @@
 """A population of CPPNs for generating evolved environments for symbionts.
 """
+from math import pi
 
 from neatchi import CppnPopulation, Matchmaker
 import numpy as np
@@ -46,31 +47,56 @@ class OuterPopulation:
         # For performing tournament selection on the CPPNs.
         self.matchmaker = Matchmaker(self.pop_shape, OUTER_GENERATIONS)
 
-        # The CPPNs used to evolve and render environments.
-        self.cppns = CppnPopulation(
-            self.pop_shape, cppn_shape, self.index, self.matchmaker)
+        # TODO: Is it appropriate to share the matchmaker like this?
+        self.min_fitness = CppnPopulation(
+            self.pop_shape, (4, 1), self.index, self.matchmaker)
+        if self.use_weights:
+            self.weights = CppnPopulation(
+                self.pop_shape, (5, BITSTR_POWER), self.index, self.matchmaker)
 
         # A space to hold the Environments generated using the CPPNs above.
         self.env = Environments(num_environments)
 
     def randomize(self):
-        self.cppns.randomize()
+        self.min_fitness.randomize()
+        if self.use_weights:
+            self.weights.randomize()
 
-    def propagate(self, generation):
-        # NOTE: make sure to set fitness scores in self.matchmaker.fitness
-        # before calling this method!
-        # We use a very high mutation rate to increase diversity in the
-        # population.
-        self.cppns.propagate(generation, mutation_rate=0.1)
+    def propagate(self, generation, evaluator):
+        if False:  # generation % 10 == 9:
+            elites = evaluator.get_elites(generation)
+            self.min_fitness.make_random_population(elites)
+            self.matchmaker.analyze_compatibility(
+                self.min_fitness, generation)
+        else:
+            # NOTE: make sure to set fitness scores in self.matchmaker.fitness
+            # before calling this method!
+            # We use a very high mutation rate to increase diversity in the
+            # population.
+            # self.cppns.propagate(generation, mutation_rate=0.1)
+            self.min_fitness.propagate(generation)
+            if self.use_weights:
+                self.weights.propagate(generation)
+
+    @ti.func
+    def polar_coords(self, x, y):
+        _, ew, eh = ti.static(self.env.shape)
+        max_x, max_y = ew // 2, eh // 2
+        x, y = x - max_x, y - max_y
+        max_r = ti.math.sqrt(max_x**2 + max_y ** 2)
+        r = ti.math.sqrt(x**2 + y**2) / max_r
+        ph = ti.math.atan2(y, x) / pi + 1.0
+        return (r, ph)
 
     @ti.kernel
     def render_environments(self):
         # Populate the settings for each location in each evolved environment
         ne, ew, eh = self.env.shape
         for e, x, y, in ti.ndrange(ne, ew, eh):
+            r, ph = self.polar_coords(x, y)
             if ti.static(self.use_weights):
                 weights = ti.Vector([0.0] * NUM_WEIGHTS)
-                outputs = ti.Vector([0.0] * (BITSTR_POWER + 1))
+                outputs = ti.Vector([0.0] * BITSTR_POWER)
 
                 # For each location, we must compute values for all the weights,
                 # which are broken down by substring length. The shortest
@@ -81,8 +107,8 @@ class OuterPopulation:
                 for s in range(num_samples):
                     # Activate the CPPN at this sample point to figure out the
                     # weights for substrings of all lengths at this point.
-                    inputs = ti.Vector([x / ew, y / eh, s / num_samples])
-                    outputs = self.cppns.activate(e, inputs)
+                    inputs = ti.Vector([x / ew, y / eh, r, ph, s / num_samples])
+                    outputs = self.weights.activate(e, inputs)
 
                     # An example of computing weight indices when BITSTR_POWER == 4
                     # The outer loop iterates over values of s while the inner loop
@@ -128,16 +154,11 @@ class OuterPopulation:
                 # threshold. It doesn't matter which value of s was used as the
                 # input; since min_fitness has nothing to do with the various
                 # substrings, it's totally arbitrary.
-
-                self.env.min_fitness[e, x, y] = outputs[BITSTR_POWER] * MAX_HIFF
             else:
-                # If we're not evolving substring weights, then we just need to
-                # find the min fitness threshold, which is much simpler (and
-                # set all weights to 1.0).
-                inputs = ti.Vector([x / ew, y / eh])
-                outputs = self.cppns.activate(e, inputs)
-                self.env.min_fitness[e, x, y] = outputs[0] * MAX_HIFF
                 self.env.weights[e, x, y].fill(1.0)
+            inputs = ti.Vector([x / ew, y / eh, r, ph])
+            outputs = self.min_fitness.activate(e, inputs)
+            self.env.min_fitness[e, x, y] = outputs[0] * MAX_HIFF
 
     def make_environments(self):
         self.render_environments()

@@ -131,7 +131,7 @@ def run_experiment_evolved_env(migration, crossover, criteria,
         inner_population.evolve(environments, migration, crossover)
         evaluator.score_populations(inner_population, og)
         if og + 1 < OUTER_GENERATIONS:
-            outer_population.propagate(og)
+            outer_population.propagate(og, evaluator)
 
     # Log the best inner_population from each trial from the last outer
     # generation (ie, a fully evolved CPPN environment)

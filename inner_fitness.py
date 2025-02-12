@@ -27,7 +27,7 @@ def weighted_hiff(bitstr, weights):
             # it is all 0's or all 1's.
             substr = bitstr & substr_mask
             score = substr_len * int(substr == 0 or substr == substr_mask)
-            fitness += score * weights[w]
+            fitness += score * weights[w] + 1.0 * (1.0 - weights[w])
             hiff += ti.cast(score, ti.int16)
 
             # Shift the mask to look at the next substr in order.
