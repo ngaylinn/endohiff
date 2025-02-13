@@ -13,7 +13,7 @@ import taichi as ti
 from constants import (
     BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from inner_fitness import weighted_hiff, count_ones
-from reproduction import mutation, crossover, tournament_selection
+from reproduction import mutation, crossover, TournamentArena
 
 
 @ti.dataclass
@@ -75,7 +75,7 @@ class InnerPopulation:
         # Per generation metadata that does not get saved.
         # Selections lets us pick fit, living individuals from pop and remember
         # the results as we proceed to modify pop.
-        self.selections = ti.field(int, shape=(ne, ew, eh, cc))
+        self.arena = TournamentArena(self.pop)
         # How many children were produced from each individual in the
         # population, used to enforce a maximum count.
         self.num_children = ti.field(int, shape=(ne, ew, eh, cc))
@@ -170,7 +170,7 @@ class InnerPopulation:
                 # Maybe use a mate for crossover.
                 m = -1
                 if ti.random() < params[e].crossover_rate:
-                    m = self.selections[e, x, y, i]
+                    m = self.arena.selections[e, x, y, i]
                 # Generate a child and populate them into this location in g+1.
                 child = self.get_child(parent, e, g, x, y, i, m, params)
                 self.pop[e, g + 1, x, y, i] = child
@@ -194,7 +194,7 @@ class InnerPopulation:
 
                 # Lookup a selected individual from the chosen location in the
                 # previous generation, if there was any.
-                pi = self.selections[e, px, py, i]
+                pi = self.arena.selections[e, px, py, i]
                 if pi > -1:
                     # Generate a child and place it into generation g+1.
                     parent = self.pop[e, g, px, py, pi]
@@ -213,9 +213,10 @@ class InnerPopulation:
                 self.cull(generation, environments, params)
                 # Select fitter individuals from the ones that survived using
                 # tournament selection.
-                self.select(generation, params)
+                self.arena.select_all(generation + 1, params)
                 # Individuals that survived replace themselves with children,
                 # possibly crossing over with a selected mate.
+                self.num_children.fill(0)
                 self.reproduce(generation, params)
                 # Empty spaces may get refilled by fit individuals in this or
                 # nearby locations producing additional children.
