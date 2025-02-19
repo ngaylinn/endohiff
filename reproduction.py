@@ -119,9 +119,9 @@ def validate_selection():
     arena.select_all(0, params)
 
     # Print a summary of results. When tournament_size == 1, you should get ~13
-    # which indicates we picked the median individual (rounded up). When
-    # tournament_size == CARRYING_CAPACITY, you should get exactly
-    # CARRYING_CAPACITY, indicating we found the best individual.
+    # which indicates we picked the median individual (rounded up) on average.
+    # When tournament_size == CARRYING_CAPACITY, you should get exactly
+    # CARRYING_CAPACITY, indicating we found the best individual every time.
     print(arena.selections.to_numpy().shape)
     mean_selection = (
         arena.selections.to_numpy() + 1
