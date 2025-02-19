@@ -9,17 +9,18 @@ from constants import (
     MAX_HIFF)
 
 
+# For converting the fields defined below to a Numpy structured array.
+ENV_DTYPE = np.dtype([
+    ('min_fitness', np.float32, ENVIRONMENT_SHAPE),
+    ('weights', np.float32, ENVIRONMENT_SHAPE + (NUM_WEIGHTS,)),
+])
+
+
 @ti.data_oriented
 class Environments:
     def __init__(self, count=1):
         self.count = count
         self.shape = (count,) + ENVIRONMENT_SHAPE
-
-        # For converting the fields defined below to a Numpy structured array.
-        self.dtype = np.dtype([
-            ('min_fitness', np.float32, ENVIRONMENT_SHAPE),
-            ('weights', np.float32, ENVIRONMENT_SHAPE + (NUM_WEIGHTS,)),
-        ])
 
         # The threshold for surviving at each location in the environment.
         self.min_fitness = ti.field(dtype=float, shape=self.shape)
@@ -30,10 +31,14 @@ class Environments:
             n=NUM_WEIGHTS, dtype=float, shape=self.shape)
 
     def to_numpy(self):
-        result = np.zeros(self.count, self.dtype)
+        result = np.zeros(self.count, ENV_DTYPE)
         result['min_fitness'] = self.min_fitness.to_numpy()
         result['weights'] = self.weights.to_numpy()
         return result
+
+    def from_numpy(self, a):
+        self.min_fitness.from_numpy(a['min_fitness'])
+        self.weights.from_numpy(a['weights'])
 
 
 def make_flat(count=1):

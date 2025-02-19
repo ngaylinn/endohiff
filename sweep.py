@@ -13,7 +13,8 @@ from tqdm import trange
 from constants import (
     CARRYING_CAPACITY, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
     OUTPUT_PATH)
-from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
+from environments import (
+    ALL_ENVIRONMENT_NAMES, ENV_DTYPE, STATIC_ENVIRONMENTS, Environments)
 from inner_population import InnerPopulation, get_default_params
 from outer_population import OuterPopulation
 from outer_fitness import FitnessEvaluator, get_per_trial_scores
@@ -25,79 +26,139 @@ TOURNAMENT_SIZES = np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1
 MORTALITY_RATES = np.linspace(0, 1, SWEEP_SIZE)
 MR_LABELS = [f'{mr:0.3f}' for mr in MORTALITY_RATES]
 
+
+# TODO: Sweep both environments at once?
 def sweep_static(env_name, verbose):
-    env = STATIC_ENVIRONMENTS[env_name](SWEEP_SIZE)
-    params = get_default_params(shape=SWEEP_SIZE)
-    inner_population = InnerPopulation(SWEEP_SIZE)
+    env = STATIC_ENVIRONMENTS[env_name](SWEEP_SIZE * NUM_TRIALS)
+    params = get_default_params(shape=SWEEP_SIZE * NUM_TRIALS)
+    inner_population = InnerPopulation(SWEEP_SIZE * NUM_TRIALS)
 
     if verbose:
-        tick_progress = trange(SWEEP_SIZE * NUM_TRIALS).update
+        print('Evolving bitstrings for all parameters...')
+        tick_progress = trange(SWEEP_SIZE).update
     else:
         tick_progress = lambda: None
 
     # Sweep over all tournament sizes in parallel.
-    params.tournament_size.from_numpy(TOURNAMENT_SIZES)
+    params.tournament_size.from_numpy(TOURNAMENT_SIZES.repeat(NUM_TRIALS))
 
     # Sweep over mortality rate in serial (not enough memory to parallelize)
     frames = []
     for mortality_rate in MORTALITY_RATES:
         params.mortality_rate.fill(mortality_rate)
 
-        # Run 5 trials in serial (not enough memory to parallelize)
-        for _ in range(NUM_TRIALS):
-            inner_population.evolve(env, params)
-            scores = get_per_trial_scores(inner_population)
-            frames.append(pl.DataFrame({
-                'Tournament Size': TOURNAMENT_SIZES,
-                'Mortality Rate': [mortality_rate] * SWEEP_SIZE,
-                'Fitness': scores,
-                'Environment': [env_name] * SWEEP_SIZE,
-            }))
-            tick_progress()
+        # Run NUM_TRIALS iterations in parallel
+        inner_population.evolve(env, params)
+        scores = get_per_trial_scores(inner_population)
+        frames.append(pl.DataFrame({
+            'Tournament Size': TOURNAMENT_SIZES.repeat(NUM_TRIALS),
+            'Mortality Rate': [mortality_rate] * SWEEP_SIZE * NUM_TRIALS,
+            'Fitness': scores,
+            'Environment': [env_name] * SWEEP_SIZE * NUM_TRIALS,
+        }))
+        tick_progress()
 
     return pl.concat(frames)
 
 
 def sweep_evolved(verbose):
     outer_population = OuterPopulation(NUM_TRIALS, False)
-    inner_population = InnerPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
-    params = get_default_params(shape=(NUM_TRIALS * OUTER_POPULATION_SIZE))
+    SIM_SIZE = NUM_TRIALS * OUTER_POPULATION_SIZE
+    inner_population = InnerPopulation(SIM_SIZE)
+    params = get_default_params(shape=(SIM_SIZE))
     evaluator = FitnessEvaluator(outer_population=outer_population)
 
+    envs_path = OUTPUT_PATH / 'sweep' / 'cppn' / 'env.npy'
+
+    if not envs_path.exists():
+        if verbose:
+            print('Evolving environemnts for all parameters...')
+            tick_progress = trange(
+                SWEEP_SIZE * SWEEP_SIZE * OUTER_GENERATIONS).update
+        else:
+            tick_progress = lambda: None
+
+        # First, sweep over both params and evolve an environment in each setting,
+        # recording the best environment for each configuration.
+        # TODO: Make this 2D and index by sweep index to avoid any ambiguity
+        # of what env goes with what settings in the second pass.
+        best_envs = np.zeros(SWEEP_SIZE * SWEEP_SIZE, ENV_DTYPE)
+        i = 0
+        for tournament_size in TOURNAMENT_SIZES:
+            params.tournament_size.fill(tournament_size)
+            for mortality_rate in MORTALITY_RATES:
+                params.mortality_rate.fill(mortality_rate)
+                outer_population.randomize()
+                for og in range(OUTER_GENERATIONS):
+                    environments = outer_population.make_environments()
+                    inner_population.evolve(environments, params)
+                    evaluator.score_populations(inner_population, og)
+                    if og + 1 < OUTER_GENERATIONS:
+                        outer_population.propagate(og)
+                    tick_progress()
+                # TODO: The results actually look really noisy! Occasionally we
+                # get abysmal performance for a single configuration, when its
+                # neighbors do fine. Perhaps we could be more clever at picking
+                # environments from this large population that are more
+                # reliable, and not just the ones that did best in one trial.
+                env_data = environments.to_numpy()
+                best_trial = evaluator.get_best_trial(og)
+                best_envs[i] = env_data[best_trial]
+                i += 1
+
+        # Save the evolved environments!
+        np.save(envs_path, best_envs)
+    else:
+        best_envs = np.load(envs_path)
+
     if verbose:
-        tick_progress = trange(
-            SWEEP_SIZE * SWEEP_SIZE * OUTER_GENERATIONS).update
+        print('Evolving bitstrings for evolved environments...')
+        tick_progress = trange(SWEEP_SIZE).update
     else:
         tick_progress = lambda: None
 
-    sweep_envs = []
+    # TODO: Break this up into two phases, and refactor to share as much code
+    # as possible with the static sweeps.
+
+    # Second, sweep over the params again to re-evolve a fresh population in
+    # each environment for NUM_TRIALS independent trials. This ensures there is
+    # no bias from the larger population size used whene evolving environments.
+
+    # Grab the environments corresponding to the mortality_rate values that
+    # we're computing in parallel, and make NUM_TRIALS copies of each one
+    # so we can run trials in parallel, then push to the GPU.
+    env = Environments(SIM_SIZE)
+    best_envs = best_envs.reshape(SWEEP_SIZE, SWEEP_SIZE)
+
+    # Sweep tournament size in parallel. Note we have to pad out the array to
+    # match SIM_SIZE
+    params.tournament_size.from_numpy(
+        np.resize(
+            TOURNAMENT_SIZES.repeat(NUM_TRIALS),
+            SIM_SIZE))
+
+    # Sweep mortality rate in serial (not enough memory)
     frames = []
-    for tournament_size in TOURNAMENT_SIZES:
-        params.tournament_size.fill(tournament_size)
-        for mortality_rate in MORTALITY_RATES:
-            params.mortality_rate.fill(mortality_rate)
-            outer_population.randomize()
-            for og in range(OUTER_GENERATIONS):
-                environments = outer_population.make_environments()
-                inner_population.evolve(environments, params)
-                evaluator.score_populations(inner_population, og)
-                if og + 1 < OUTER_GENERATIONS:
-                    outer_population.propagate(og)
-            # TODO: Actually, we should re-run each experiment with 5 trials
-            # rather than taking the best of 50 like we do here.
-            env_data = environments.to_numpy()['min_fitness']
-            best_trial = evaluator.get_best_trial(og)
-            best_env = evaluator.get_best_per_trial(og)[best_trial]
-            best_env_data = env_data[best_env]
-            sweep_envs.append(best_env_data)
-            score = evaluator.get_fitenss(best_env, og)
-            frames.append(pl.DataFrame({
-                'Tournament Size': tournament_size,
-                'Mortality Rate': mortality_rate,
-                'Fitness': score,
-                'Environment': 'cppn',
-            }))
-            tick_progress()
+    for m, mortality_rate in enumerate(MORTALITY_RATES):
+        params.mortality_rate.fill(mortality_rate)
+        # Grab just the environments corresponding to the current mortality
+        # rate. That includes one for every tournament size value. Repeat each
+        # env NUM_TRIALS times, and pad out the array to match SIM_SIZE.
+        curr_envs = best_envs[:, m]
+        env.from_numpy(np.resize(curr_envs.repeat(NUM_TRIALS), SIM_SIZE))
+
+        # Run NUM_TRIALS iterations in parallel
+        inner_population.evolve(env, params)
+
+        scores = get_per_trial_scores(inner_population)
+        scores = scores[:SWEEP_SIZE * NUM_TRIALS]
+        frames.append(pl.DataFrame({
+            'Tournament Size': TOURNAMENT_SIZES.repeat(NUM_TRIALS),
+            'Mortality Rate': [mortality_rate] * SWEEP_SIZE * NUM_TRIALS,
+            'Fitness': scores,
+            'Environment': ['cppn'] * SWEEP_SIZE * NUM_TRIALS,
+        }))
+        tick_progress()
 
     return pl.concat(frames)
 
@@ -106,6 +167,7 @@ def pivot(data):
     return data.to_pandas().pivot_table(
         index='Tournament Size', columns='Mortality Rate',
         values='Fitness', aggfunc='mean')
+
 
 def chart(data):
     sns.heatmap(
@@ -134,7 +196,6 @@ def compare():
         plt.close()
 
 
-
 def main(env_name, verbose):
     path = OUTPUT_PATH / 'sweep' / env_name
     path.mkdir(exist_ok=True, parents=True)
@@ -143,7 +204,10 @@ def main(env_name, verbose):
     if data_filename.exists():
         data = pl.read_parquet(data_filename)
     else:
-        data = sweep_static(env_name, verbose)
+        if env_name == 'cppn':
+            data = sweep_evolved(verbose)
+        else:
+            data = sweep_static(env_name, verbose)
         data.write_parquet(data_filename)
 
     sns.heatmap(pivot(data), xticklabels=MR_LABELS, cmap='viridis')
