@@ -135,7 +135,8 @@ def run_experiment_evolved_env(migration, crossover, criteria,
     # population of bitstrings within each one.
     outer_population = OuterPopulation(NUM_TRIALS, use_weights)
     inner_population = InnerPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
-    evaluator = FitnessEvaluator(outer_population, criteria)
+    evaluator = FitnessEvaluator(
+        outer_population=outer_population, criteria=criteria)
 
     # Evolve an outer population of environments. For performance reason,
     # this entire loop runs on the GPU with minimal data transfers.
