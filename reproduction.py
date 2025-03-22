@@ -122,11 +122,9 @@ def validate_selection():
     # which indicates we picked the median individual (rounded up) on average.
     # When tournament_size == CARRYING_CAPACITY, you should get exactly
     # CARRYING_CAPACITY, indicating we found the best individual every time.
-    print(arena.selections.to_numpy().shape)
     mean_selection = (
         arena.selections.to_numpy() + 1
     ).mean(axis=(1, 2, 3))
-    print(mean_selection.shape)
     print('Mean selection for tournament of size:')
     for i in range(CARRYING_CAPACITY):
         print(i + 1, f'{mean_selection[i]:0.3f}')

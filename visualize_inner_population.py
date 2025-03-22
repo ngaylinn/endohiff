@@ -15,16 +15,15 @@ import seaborn as sns
 from tqdm import trange
 
 from constants import (
-    BITSTR_POWER, BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
-    POP_TILE_SIZE)
+    BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF, POP_TILE_SIZE)
 
 
 # Making ridgeplots with Seaborn generates lots of these warnings.
 warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
 
 
-def chart_hiff_dist(path, inner_log):
-    """Generate a ridgeplot showing hiff distribution over generations.
+def chart_fitness_dist(path, inner_log):
+    """Generate a ridgeplot showing fitness distribution over generations.
     """
     num_ridges = 10
     ridge_gap = INNER_GENERATIONS // num_ridges
@@ -39,8 +38,8 @@ def chart_hiff_dist(path, inner_log):
         # For all cells across all generations...
         'Generation', 'x', 'y'
     ).agg(
-        # Find the mean hiff score for all individuals in this cell.
-        pl.col('hiff').mean().alias('Mean Hiff')
+        # Find the mean fitness score for all individuals in this cell.
+        pl.col('fitness').mean().alias('Mean Fitness')
     ).drop('x', 'y')
 
     # Since we only count living individuals, we might have no data for some
@@ -50,16 +49,16 @@ def chart_hiff_dist(path, inner_log):
         sample_generations - set(inner_log['Generation'].unique()))
     inner_log = pl.concat((inner_log, pl.DataFrame({
         'Generation': sorted(missing_generations),
-        'Mean Hiff': 0.0
+        'Mean Fitness': np.float32(0.0)
     })))
 
-    # Add a column indicating the overall average hiff score so we can color
+    # Add a column indicating the overall average fitness score so we can color
     # each ridge to match the performance at that time step.
     inner_log = inner_log.join(
         inner_log.group_by(
             'Generation'
         ).agg(
-            pl.col('Mean Hiff').mean().alias('color')
+            pl.col('Mean Fitness').mean().alias('color')
         ),
         on='Generation',
         how='inner',
@@ -72,7 +71,7 @@ def chart_hiff_dist(path, inner_log):
         inner_log, row='Generation', hue='Generation',
         aspect=15, height=0.5, xlim=(0, MAX_HIFF))
 
-    # Plot the mean hiff score for each sample generation and label it with the
+    # Plot the mean fitness score for each sample generation and label it with the
     # generation number.
     def plot_ridge(x, color, label):
         ax = plt.gca()
@@ -80,7 +79,7 @@ def chart_hiff_dist(path, inner_log):
         sns.kdeplot(x=x, color=color, fill=True, warn_singular=False)
         ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
                 transform=ax.transAxes)
-    grid.map(plot_ridge, 'Mean Hiff')
+    grid.map(plot_ridge, 'Mean Fitness')
 
     # Apply styling and save results.
     grid.refline(y=0, linestyle='-', clip_on=False)
@@ -88,9 +87,9 @@ def chart_hiff_dist(path, inner_log):
     grid.set_titles('')
     grid.set(yticks=[], ylabel='')
     grid.despine(bottom=True, left=True)
-    grid.figure.suptitle(f'Hiff score distribution')
+    grid.figure.suptitle(f'Fitness score distribution')
     grid.figure.supylabel('Density')
-    grid.figure.savefig(path / 'hiff_dist.png', dpi=600)
+    grid.figure.savefig(path / 'fitness_dist.png', dpi=600)
     plt.close()
 
     # Restore the default colormap so we don't alter other charts generated
@@ -120,70 +119,22 @@ def render_map_decorations(tile_size=1):
     plt.grid(color='k')
 
 
-def render_env_map_min_fitness(env_data):
+def render_env_map(env_data):
     """Render a map of minimum fitness values in an environment.
     """
     plt.figure(figsize=(8, 4.5))
-    plt.imshow(env_data['min_fitness'].transpose())
+    plt.imshow(env_data.transpose())
     plt.clim(0, MAX_HIFF)
     render_map_decorations()
     plt.suptitle(f'Environment Min Fitness')
     plt.tight_layout()
 
 
-def render_env_map_weights(env_data):
-    """Render a map of minimum fitness values in an environment.
-
-    This function summarizes all the substring weights for a location in a
-    single, densely packed visualization. For each location, there's one column
-    for each length of substring, and that column is subdivided into one row
-    for each substring of that length. This means the rightmost column
-    (representing the one 64-bit substring) has just one row, and the leftmost
-    column (representing the 32 2-bit substrings) has 32 rows.
-    """
-    tile_size = (BITSTR_LEN // 2)
-    scaled_shape = tile_size * np.array(ENVIRONMENT_SHAPE)
-    env_map = np.zeros(scaled_shape)
-    bar_width = tile_size // BITSTR_POWER
-    # For each location in the environment...
-    for (x, y) in np.ndindex(ENVIRONMENT_SHAPE):
-        # Render a tile summarizing the weights at that location.
-        map_tile = np.zeros((tile_size, tile_size))
-        weights = env_data['weights'][x, y]
-        w = 0
-
-        # For all the different lengths of substring...
-        for p in range(BITSTR_POWER):
-            # Look up the relevant weights and paint them into the map tile.
-            substr_len = 2 ** (p + 1)
-            substr_count = BITSTR_LEN // substr_len
-            substr_weights = weights[w:w + substr_count]
-            map_tile[p * bar_width:] = substr_weights.repeat(
-                tile_size // substr_count)
-            w += substr_count
-
-        # Place this tile into the overall map.
-        env_map[x * tile_size:(x + 1) * tile_size,
-                y * tile_size:(y + 1) * tile_size] = map_tile
-
-    # Actually draw the figure.
-    plt.figure(figsize=(8, 4.5))
-    plt.imshow(env_map.transpose())
-    plt.clim(0.0, 1.0)
-    render_map_decorations(tile_size)
-    plt.suptitle(f'Environment Substring Weights')
-    plt.tight_layout()
-
-
-def save_env_map(path, env_data, prefix='env_map'):
+def save_env_map(path, env_data, name='env_map'):
     """Summarize an environment with maps for min fitness and substr weights.
     """
-    render_env_map_min_fitness(env_data)
-    plt.savefig(path / f'{prefix}_fitness.png', dpi=600)
-    plt.close()
-
-    render_env_map_weights(env_data)
-    plt.savefig(path / f'{prefix}_weights.png', dpi=600)
+    render_env_map(env_data)
+    plt.savefig(path / f'{name}.png', dpi=600)
     plt.close()
 
 
@@ -209,24 +160,26 @@ def spatialize_pop_data(pop_data):
         ew=ew, eh=eh, cw=cw, ch=ch)
 
 
-def save_hiff_map(path, inner_log):
-    """Render a static map of final hiff scores from a population.
-    """
+def render_fitness_map(inner_log):
     plt.figure(figsize=(8, 4.5))
-    pop_data = get_masked_column_data(inner_log, 'hiff')
+    pop_data = get_masked_column_data(inner_log, 'fitness')
     plt.imshow(spatialize_pop_data(pop_data),
                plt.get_cmap().with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
     render_map_decorations(POP_TILE_SIZE)
     plt.suptitle(f'HIFF score map')
     plt.tight_layout()
-    plt.savefig(path / 'hiff_map.png', dpi=600)
+
+
+def save_fitness_map(path, inner_log):
+    """Render a static map of final fitness scores from a population.
+    """
+    render_fitness_map(inner_log)
+    plt.savefig(path / 'fitness_map.png', dpi=600)
     plt.close()
 
 
-def save_one_frac_map(path, inner_log):
-    """Render a static map of a population's ratio of 1s to 0s.
-    """
+def render_one_frac_map(inner_log):
     plt.figure(figsize=(8, 4.5))
     pop_data = get_masked_column_data(inner_log, 'one_count') / BITSTR_LEN
     plt.imshow(spatialize_pop_data(pop_data),
@@ -235,16 +188,22 @@ def save_one_frac_map(path, inner_log):
     render_map_decorations(POP_TILE_SIZE)
     plt.suptitle(f'Bit ratio map')
     plt.tight_layout()
+
+
+def save_one_frac_map(path, inner_log):
+    """Render a static map of a population's ratio of 1s to 0s.
+    """
+    render_one_frac_map(inner_log)
     plt.savefig(path / 'one_frac_map.png', dpi=600)
     plt.close()
 
 
-def save_hiff_animation(path, inner_log, gif=True):
+def save_fitness_animation(path, inner_log, gif=True):
     """Save a video of the inner population over a single experiment.
     """
     # Grab the data we need and split it by generation.
     fitness_by_generation = get_masked_column_data(
-        inner_log, 'hiff'
+        inner_log, 'fitness'
     ).reshape(INNER_GENERATIONS, -1)
 
     # Set up a figure with no decorations or padding.
@@ -263,9 +222,9 @@ def save_hiff_animation(path, inner_log, gif=True):
     anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
 
     if gif:
-        anim.save(path / 'hiff_map.gif', writer='pillow', dpi=20)
+        anim.save(path / 'fitness_map.gif', writer='pillow', dpi=20)
     else:
-        anim.save(path / 'hiff_map.mp4', writer='ffmpeg')
+        anim.save(path / 'fitness_map.mp4', writer='ffmpeg')
     plt.close()
 
 
@@ -312,10 +271,10 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
     save_one_frac_animation(path, inner_log)
     tick_progress()
 
-    save_hiff_animation(path, inner_log)
+    save_fitness_animation(path, inner_log)
     tick_progress()
 
-    chart_hiff_dist(path, inner_log)
+    chart_fitness_dist(path, inner_log)
     tick_progress()
 
     # Restrict to the last generation and render still maps of the final state.
@@ -326,7 +285,7 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
     save_one_frac_map(path, inner_log)
     tick_progress()
 
-    save_hiff_map(path, inner_log)
+    save_fitness_map(path, inner_log)
     tick_progress()
 
     save_env_map(path, env_data)

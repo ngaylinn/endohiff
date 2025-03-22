@@ -15,15 +15,15 @@ from constants import INNER_GENERATIONS, OUTPUT_PATH, MAX_HIFF, MIN_HIFF
 from run_experiment import get_all_trials
 
 
-def summarize_hiff_scores(inner_log):
+def summarize_fitness(inner_log):
     return inner_log.filter(
         pl.col('alive') & (pl.col('Generation') == INNER_GENERATIONS - 1)
-    # Average hiff scores for each location in the
-    # environment, so we can analyze relative concentrations
+    # Average fitness scores for each location in the environment, so we can
+    # analyze relative concentrations
     ).group_by(
         'x', 'y'
     ).agg(
-        pl.col('hiff').mean().alias('Mean Hiff')
+        pl.col('fitness').mean().alias('Mean Fitness')
     # Drop the location data. We just want to make a histogram over locations
     # in the environment, so we need samples from each location, but don't need
     # to remember where the samples came from.
@@ -42,11 +42,11 @@ def aggregate_logs(verbose):
     else:
         tick_progress = lambda: None
 
-    hiff_score_frames = []
+    frames = []
     for variant_name, env_name, trial, log_file in all_trials:
         inner_log = pl.read_parquet(log_file)
-        hiff_score_frames.append(
-            summarize_hiff_scores(
+        frames.append(
+            summarize_fitness(
                 inner_log
             ).with_columns(
                 environment=pl.lit(env_name),
@@ -54,26 +54,26 @@ def aggregate_logs(verbose):
                 trial=pl.lit(trial)
             ))
         tick_progress()
-    return pl.concat(hiff_score_frames)
+    return pl.concat(frames)
 
 
 def get_aggregate_logs(verbose):
-    hiff_scores_path = OUTPUT_PATH / 'hiff_scores.parquet'
-    if hiff_scores_path.exists():
+    aggregate_fitness_path = OUTPUT_PATH / 'fitness.parquet'
+    if aggregate_fitness_path.exists():
         if verbose > 0:
             print()
             print('Reusing aggregated log data.')
-        hiff_scores = pl.read_parquet(hiff_scores_path)
+        fitness = pl.read_parquet(aggregate_fitness_path)
     else:
-        hiff_scores = aggregate_logs(verbose)
-        hiff_scores.write_parquet(hiff_scores_path)
-    return hiff_scores
+        fitness = aggregate_logs(verbose)
+        fitness.write_parquet(aggregate_fitness_path)
+    return fitness
 
 
-def compare_hiff_distributions(data, column, file=None):
+def compare_fitness_distributions(data, column, file=None):
     """Use Mann Witney U test to compare result distributions.
 
-    This function compares the local mean hiff score distributions between
+    This function compares the local mean fitness score distributions between
     experiments whose data are distinguished by the value in column.
     """
     conditions = data[column].unique()
@@ -81,8 +81,8 @@ def compare_hiff_distributions(data, column, file=None):
     # Do pairwise comparisons of all the different conditions found in data.
     for (cond_a, cond_b) in combinations(conditions, 2):
         # Isolate and compare data across conditions.
-        data_a = data.filter(pl.col(column) == cond_a)['Mean Hiff']
-        data_b = data.filter(pl.col(column) == cond_b)['Mean Hiff']
+        data_a = data.filter(pl.col(column) == cond_a)['Mean Fitness']
+        data_b = data.filter(pl.col(column) == cond_b)['Mean Fitness']
         _, p_less = mannwhitneyu(data_a, data_b, alternative='less')
         _, p_greater = mannwhitneyu(data_a, data_b, alternative='greater')
 
@@ -95,39 +95,39 @@ def compare_hiff_distributions(data, column, file=None):
             print(template.format(cond_a, cond_b), f'p = {p_less}', file=file)
 
 
-def chart_hiff_comparison(data, column, file):
-    """Chart a comparison of mean hiff distributions.
+def chart_fitness_comparison(data, column, file):
+    """Chart a comparison of mean fitness distributions.
 
-    This function compares the local mean hiff score distributions between
+    This function compares the local mean fitness score distributions between
     experiments whose data are distinguished by the value in column, saving the
     results to file, using name in the title.
     """
     fig = sns.displot(
-        data, x='Mean Hiff', kind='kde', hue=column, aspect=1.33)
+        data, x='Mean Fitness', kind='kde', hue=column, aspect=1.33)
     plt.xlim(MIN_HIFF, MAX_HIFF)
     sns.move_legend(fig, 'upper right', bbox_to_anchor=(0.7, 0.8))
-    fig.set(title=f'Population HIFF Distribution')
+    fig.set(title=f'Population Fitness Distribution')
     fig.savefig(file, dpi=600)
     plt.close()
 
 
 def compare_experiments(path, data, column, suffix=''):
-    """Compare hiff scores between different experimental variants.
+    """Compare fitness scores between different experimental variants.
 
     The results from all experiments to compare should be in data, with the
     value in column used to identify the conditions to compare. All outputs are
     saved to path, optionally annotated with the given filename suffix.
     """
     with open(path / f'mannwhitneyu{suffix}.txt', 'w') as file:
-        compare_hiff_distributions(data, column, file)
-    chart_hiff_comparison(
-        data, column, path / f'hiff_dist{suffix}.png')
+        compare_fitness_distributions(data, column, file)
+    chart_fitness_comparison(
+        data, column, path / f'fitness_dist{suffix}.png')
 
 
 def main(verbose):
     """Visualize comparisons between all the primary experiments.
     """
-    # Read the final hiff score data from all experiments that have been run.
+    # Read the final fitness score data from all experiments that have been run.
     all_data = get_aggregate_logs(verbose)
     variants = all_data['variant'].unique()
     environments = all_data['environment'].unique()

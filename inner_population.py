@@ -11,8 +11,8 @@ import polars as pl
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
-from inner_fitness import weighted_hiff, count_ones
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
+from inner_fitness import score_hiff
 from reproduction import mutation, crossover, TournamentArena
 
 
@@ -29,21 +29,27 @@ def get_default_params(shape=1):
     field = Params.field(shape=shape)
     field.migration_rate.fill(1.0)
     field.crossover_rate.fill(0.5)
-    field.mortality_rate.fill(0.0)
+    field.mortality_rate.fill(0.25)
     field.max_fertility.fill(25)
     field.tournament_size.fill(2)
     return field
 
 
+# TODO: Maybe remove? The experiment no longer uses this, but it's still here
+# mostly because it's fun to look at (also for skew analysis, but that could be
+# a one-off, rather than storing one_count in all the logs). 
+@ti.func
+def count_ones(bitstr):
+    one_count = ti.cast(0, ti.int8)
+    for b in range(BITSTR_LEN):
+        one_count += ti.cast((bitstr >> b) & 1, ti.int8)
+    return one_count
+
+
 @ti.dataclass
 class Individual:
     bitstr: BITSTR_DTYPE
-    # The fitness score of this individual (weighted HIFF).
-    fitness: ti.float32
-    # The raw HIFF score of this individual.
-    hiff: ti.int16
-    # How many ones are in the bitstr.
-    one_count: ti.int8
+    fitness: ti.float16
 
     @ti.func
     def is_dead(self):
@@ -55,7 +61,7 @@ class Individual:
 
     @ti.func
     def mark_dead(self):
-        self.fitness = ti.math.nan
+        self.fitness = ti.cast(ti.math.nan, ti.float16)
 
 
 @ti.data_oriented
@@ -95,23 +101,19 @@ class InnerPopulation:
             self.pop[e, 0, x, y, i] = Individual(ti.random(BITSTR_DTYPE))
 
     @ti.kernel
-    def evaluate(self, g: ti.i32, environment: ti.template()):
+    def evaluate(self, g: ti.i32):
         for e, x, y, i in ti.ndrange(*self.shape):
             # Only evaluate fitness of individuals that are alive.
             individual = self.pop[e, g, x, y, i]
             if individual.is_alive():
-                fitness, hiff = weighted_hiff(
-                    individual.bitstr, environment.weights[e, x, y])
-                individual.fitness = fitness
-                individual.hiff = hiff
-                individual.one_count = count_ones(individual.bitstr)
+                individual.fitness = score_hiff(individual.bitstr)
                 self.pop[e, g, x, y, i] = individual
 
     @ti.kernel
     def cull(self, g: int, environment: ti.template(), params: ti.template()):
         for e, x, y, i in ti.ndrange(*self.shape):
             individual = self.pop[e, g, x, y, i]
-            min_fitness = environment.min_fitness[e, x, y]
+            min_fitness = environment[e, x, y]
             unfit = individual.is_dead() or individual.fitness < min_fitness
             unlucky = ti.random() < params[e].mortality_rate
             # Update the next generation to indicate which individuals from
@@ -120,23 +122,6 @@ class InnerPopulation:
                 self.pop[e, g + 1, x, y, i].mark_dead()
             else:
                 self.pop[e, g + 1, x, y, i] = individual
-
-    @ti.kernel
-    def select(self, g: int, params: ti.template()):
-        for e, x, y, i in ti.ndrange(*self.shape):
-            # For each unit of carrying capacity, use tournament selection to
-            # find one alive and relatively fit individual who is vying for
-            # that carrying capacity. They might try to mate with whoever's
-            # already there, or reproduce into that spot themselves there if
-            # it's vacant. Note, we do selection on generation g+1 because
-            # that's how we know who survived the cull() operation, but we
-            # should look at generation g to find those individuals, since g+1
-            # will hold their children, which will be mutated.
-            self.selections[e, x, y, i] = tournament_selection(
-                self.pop, e, g + 1, x, y, params[e].tournament_size)
-            # Count how many children each individual has in the current
-            # generation, so we can enforce a maximum number.
-            self.num_children[e, x, y, i] = 0
 
     @ti.func
     def get_child(self, parent, e, g, x, y, i, m, params):
@@ -206,7 +191,7 @@ class InnerPopulation:
         for generation in range(INNER_GENERATIONS):
             # Look at all the bitstrings and determine their fitness, given
             # their local environmental conditions.
-            self.evaluate(generation, environments)
+            self.evaluate(generation)
             if generation + 1 < INNER_GENERATIONS:
                 # Look at individuals in the current generation, see who lives,
                 # and indicate that in the population in the next generation.
@@ -231,32 +216,48 @@ class InnerPopulation:
     def get_logs_kernel(self, e: int,
                         bitstr: ti.types.ndarray(),
                         fitness: ti.types.ndarray(),
-                        hiff: ti.types.ndarray(),
                         one_count: ti.types.ndarray()):
         ne, ig, ew, eh, cc = self.pop.shape
         for g, x, y, i in ti.ndrange(ig, ew, eh, cc):
             individual = self.pop[e, g, x, y, i]
             bitstr[g, x, y, i] = individual.bitstr
             fitness[g, x, y, i] = individual.fitness
-            hiff[g, x, y, i] = individual.hiff
-            one_count[g, x, y, i] = individual.one_count
+            one_count[g, x, y, i] = count_ones(individual.bitstr)
 
     def get_logs(self, env_index):
         # Grab just the logs we need from the GPU...
         shape = self.pop.shape[1:]
         bitstr = np.zeros(shape, dtype=np.uint64)
-        fitness = np.zeros(shape, dtype=np.float32)
-        hiff = np.zeros(shape, dtype=np.int16)
-        one_count = np.zeros(shape, dtype=np.uint8)
-        self.get_logs_kernel(env_index, bitstr, fitness, hiff, one_count)
+        fitness = np.zeros(shape, dtype=np.float16)
+        one_count = np.zeros(shape, dtype=np.int8)
+        self.get_logs_kernel(env_index, bitstr, fitness, one_count)
 
         # Make a data frame and annotate it with the premade index.
         return pl.DataFrame({
-            'bitstr': bitstr.flatten(),
-            'fitness': fitness.flatten(),
-            'alive': ~np.isnan(fitness.flatten()),
-            'hiff': hiff.flatten(),
-            'one_count': one_count.flatten(),
+            'bitstr': bitstr.ravel(),
+            'fitness': fitness.ravel(),
+            'alive': ~np.isnan(fitness.ravel()),
+            'one_count': one_count.ravel(),
         }).hstack(
             self.index
         )
+
+
+# A demo to show that evolution is working.
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    from environments import make_baym
+    from visualize_inner_population import render_one_frac_map
+
+    ti.init(ti.cuda)
+
+    env = make_baym()
+    params = get_default_params()
+    inner_population = InnerPopulation()
+
+    inner_population.evolve(env, params)
+    inner_log = inner_population.get_logs(0).filter(
+        pl.col('Generation') == INNER_GENERATIONS - 1
+    )
+    render_one_frac_map(inner_log)
+    plt.show()

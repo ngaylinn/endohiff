@@ -21,7 +21,7 @@ from constants import (
 from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
 from inner_population import InnerPopulation, get_default_params
 from outer_population import OuterPopulation
-from outer_fitness import FitnessCriteria, FitnessEvaluator, get_best_trial
+from outer_fitness import FitnessEvaluator, get_best_trial
 
 # We store weights in a vector, which Taichi warns could cause slow compile
 # times. In practice, this doesn't seem like a problem, so disable the warning.
@@ -100,22 +100,9 @@ def run_experiment_static_env(env_name, migration, crossover):
     link_best_trial(path, get_best_trial(inner_population))
 
 
-def run_experiment_evolved_env(migration, crossover, criteria,
-                               use_weights, verbose):
+def run_experiment_evolved_env(migration, crossover, verbose):
     variant_name = get_variant_name(migration, crossover)
-
-    # For now, we've got two kinds of CPPN experiments, using the "default"
-    # configuration, and exploring many variations of that theme. Check which
-    # we're doing based on the arguments, and set the output filename
-    # accordingly.
-    if use_weights is None or criteria is None:
-        use_weights = False
-        criteria = FitnessCriteria.ANY
-        suffix = ''
-    else:
-        criteria = FitnessCriteria[criteria.upper()]
-        suffix = f'_{use_weights}_{criteria.name.lower()}'
-    path = OUTPUT_PATH / variant_name / f'cppn{suffix}'
+    path = OUTPUT_PATH / variant_name / f'cppn'
 
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
@@ -133,10 +120,9 @@ def run_experiment_evolved_env(migration, crossover, criteria,
 
     # Evolve a population of CPPN environments NUM_TRIALS times, and a whole
     # population of bitstrings within each one.
-    outer_population = OuterPopulation(NUM_TRIALS, use_weights)
+    outer_population = OuterPopulation(NUM_TRIALS)
     inner_population = InnerPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
-    evaluator = FitnessEvaluator(
-        outer_population=outer_population, criteria=criteria)
+    evaluator = FitnessEvaluator(outer_population=outer_population)
 
     # Evolve an outer population of environments. For performance reason,
     # this entire loop runs on the GPU with minimal data transfers.
@@ -170,10 +156,9 @@ def run_experiment_evolved_env(migration, crossover, criteria,
     link_best_trial(path, evaluator.get_best_trial(og))
 
 
-def main(env_name, migration, crossover, criteria, use_weights, verbose):
+def main(env_name, migration, crossover, verbose):
     if env_name == 'cppn':
-        run_experiment_evolved_env(
-            migration, crossover, criteria, use_weights, verbose)
+        run_experiment_evolved_env(migration, crossover, verbose)
     else:
         run_experiment_static_env(env_name, migration, crossover)
 
@@ -196,13 +181,6 @@ if __name__ == '__main__':
     parser.add_argument(
         'crossover', type='bool string', choices=[True, False],
         help='Whether to enable crossover for this experiment.')
-    parser.add_argument(
-        '--criteria', type=str, default=None,
-        choices=[criteria.name.lower() for criteria in FitnessCriteria],
-        help='Fitness criteria used when evolving an environment.')
-    parser.add_argument(
-        '--use_weights', type='bool string', default=None, choices=[True, False],
-        help='Whether to use substring weights when evolving an environment.')
     parser.add_argument(
         '-v', '--verbose', type=int, default=1, choices=[0, 1],
         help='Verbosity level (0 for minimal output)')

@@ -18,7 +18,7 @@ constants.BITSTR_LEN = 2 ** constants.BITSTR_POWER
 constants.NUM_WEIGHTS = constants.BITSTR_LEN - 1
 NUM_VALUES = 2**constants.BITSTR_LEN
 
-from inner_fitness import hiff
+from inner_fitness import score_hiff
 
 ti.init(ti.cuda)
 
@@ -29,7 +29,7 @@ hiffs = ti.field(ti.u32, shape=NUM_VALUES)
 @ti.kernel
 def compute_hiffs():
     for i in range(NUM_VALUES):
-        hiffs[i]  = hiff(i)
+        hiffs[i]  = score_hiff(i)
 
 
 def save_hiff_diagram():
@@ -51,9 +51,12 @@ def save_migration_diagram():
     """Visualize the spatial distribution of migrating individuals.
     """
     np.random.seed(42)
+    # TODO: What do you want to visualize here? Maybe find a better way to get
+    # the default migration rate? Maybe compare min and max migration rates?
+    MIGRATION_RATE = 1.0
     sns.relplot(
-        x=constants.MIGRATION_RATE*np.random.randn(constants.CARRYING_CAPACITY),
-        y=constants.MIGRATION_RATE*np.random.randn(constants.CARRYING_CAPACITY),
+        x=MIGRATION_RATE*np.random.randn(constants.CARRYING_CAPACITY),
+        y=MIGRATION_RATE*np.random.randn(constants.CARRYING_CAPACITY),
         kind='scatter'
     )
     plt.xticks([-1.5, -0.5, 0.5, 1.5], labels=[])

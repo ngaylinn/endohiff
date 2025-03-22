@@ -11,7 +11,6 @@ BITSTR_LEN = 2 ** BITSTR_POWER
 BITSTR_DTYPE = ti.uint64
 MIN_HIFF = BITSTR_LEN
 MAX_HIFF = BITSTR_LEN * (BITSTR_POWER + 1)
-NUM_WEIGHTS = BITSTR_LEN - 1
 
 # Constants specifying the size and shape of the environment.
 # A 16x9 aspect ratio is ideal for most current displays.
