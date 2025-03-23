@@ -5,8 +5,8 @@ import polars as pl
 import taichi as ti
 from compare_experiments import compare_experiments
 
-from constants import INNER_GENERATIONS, OUTPUT_PATH
-from environments import make_field, make_baym
+from constants import ENVIRONMENT_SHAPE, INNER_GENERATIONS, OUTPUT_PATH
+from environments import expand_shape, make_field, make_baym
 from inner_population import InnerPopulation, get_default_params
 from visualize_inner_population import visualize_experiment
 
@@ -15,7 +15,7 @@ from visualize_inner_population import visualize_experiment
 ti.init(ti.cuda, unrolling_limit=0)
 
 
-def make_stretched():
+def make_stretched(shape=None):
     # Ramp up and down like Baym, but make the "step" that got the highest
     # fitness scores much, much wider.
     ramp_up_and_down = np.array([
@@ -28,20 +28,15 @@ def make_stretched():
         320, 320, 320, 320, 320, 320, 320, 320,
         256, 256, 192, 192, 128, 128,  64,  64])
 
-    env = make_field()
-    env.from_numpy(
-        np.broadcast_to(
-            np.expand_dims(ramp_up_and_down, 1),
-            env.shape))
-    return env
+    shape = expand_shape(shape)
+    return np.broadcast_to(np.expand_dims(ramp_up_and_down, 1), shape)
 
 
 # This is just a variation on the flat environment, but using the minimum
 # fitness threshold that got the best fitness score in a garduated setting.
-def make_noramp():
-    env = make_field()
-    env.from_numpy(np.full(env.shape, 320))
-    return env
+def make_noramp(shape=None):
+    shape = expand_shape(shape)
+    return np.full(shape, 320)
 
 
 def baym_variants():
@@ -55,8 +50,9 @@ def baym_variants():
     }
     logs = {}
 
+    env = make_field()
     for env_name, make_env in environments.items():
-        env = make_env()
+        env.from_numpy(make_env())
         params = get_default_params()
         inner_population = InnerPopulation()
         inner_population.evolve(env, params)

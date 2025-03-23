@@ -11,7 +11,7 @@ import polars as pl
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from inner_fitness import score_hiff
 from reproduction import mutation, crossover, TournamentArena
 
@@ -19,20 +19,37 @@ from reproduction import mutation, crossover, TournamentArena
 @ti.dataclass
 class Params:
     migration_rate: ti.float16
-    crossover_rate: ti.float16
     mortality_rate: ti.float16
     max_fertility: ti.int8
     tournament_size: ti.int8
 
 
-def get_default_params(shape=1):
+PARAMS_DTYPE = np.dtype([
+    ('migration_rate', np.float16),
+    ('mortality_rate', np.float16),
+    ('max_fertility', np.int8),
+    ('tournament_size', np.int8),
+    ('sample_point', np.object_)
+])
+
+
+def get_default_params(shape=(1,)):
     field = Params.field(shape=shape)
     field.migration_rate.fill(1.0)
-    field.crossover_rate.fill(0.5)
     field.mortality_rate.fill(0.25)
     field.max_fertility.fill(25)
     field.tournament_size.fill(2)
     return field
+
+
+def get_default_params_numpy(shape=(1,)):
+    params = np.empty(shape, dtype=PARAMS_DTYPE)
+    params['migration_rate'] = 1.0
+    params['mortality_rate'] = 0.25
+    params['max_fertility'] = 25
+    params['tournament_size'] = 2
+    params['sample_point'] = None
+    return params
 
 
 # TODO: Maybe remove? The experiment no longer uses this, but it's still here
@@ -154,7 +171,7 @@ class InnerPopulation:
                 parent = self.pop[e, g, x, y, i]
                 # Maybe use a mate for crossover.
                 m = -1
-                if ti.random() < params[e].crossover_rate:
+                if ti.random() < CROSSOVER_RATE:
                     m = self.arena.selections[e, x, y, i]
                 # Generate a child and populate them into this location in g+1.
                 child = self.get_child(parent, e, g, x, y, i, m, params)
@@ -246,12 +263,13 @@ class InnerPopulation:
 # A demo to show that evolution is working.
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from environments import make_baym
+    from environments import make_baym, make_field
     from visualize_inner_population import render_one_frac_map
 
     ti.init(ti.cuda)
 
-    env = make_baym()
+    env = make_field()
+    env.from_numpy(make_baym())
     params = get_default_params()
     inner_population = InnerPopulation()
 

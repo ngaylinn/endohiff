@@ -18,7 +18,7 @@ from tqdm import trange
 
 from constants import (
     NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
-from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS
+from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_field
 from inner_population import InnerPopulation, get_default_params
 from outer_population import OuterPopulation
 from outer_fitness import FitnessEvaluator, get_best_trial
@@ -68,7 +68,8 @@ def run_experiment_static_env(env_name, migration, crossover):
     path = OUTPUT_PATH / variant_name / env_name
 
     # Set up environments and parameters for the InnerPopulation.
-    environments = STATIC_ENVIRONMENTS[env_name](NUM_TRIALS)
+    environments = make_field(NUM_TRIALS)
+    environments.from_numpy(STATIC_ENVIRONMENTS[env_name](NUM_TRIALS))
     params = get_default_params(NUM_TRIALS)
     if not migration:
         params.migration_rate.fill(0.0)

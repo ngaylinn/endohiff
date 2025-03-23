@@ -10,7 +10,7 @@ import taichi as ti
 from tqdm import trange
 
 from constants import INNER_GENERATIONS, OUTPUT_PATH
-from environments import STATIC_ENVIRONMENTS
+from environments import STATIC_ENVIRONMENTS, make_field
 from inner_population import InnerPopulation, get_default_params
 
 
@@ -23,7 +23,8 @@ NUM_PARALLEL = 25
 
 # Set up to run NUM_PARALLEL simulations on the GPU.
 ti.init(ti.cuda)
-env = STATIC_ENVIRONMENTS['baym'](NUM_PARALLEL)
+env = make_field(NUM_PARALLEL)
+env.from_numpy(STATIC_ENVIRONMENTS['baym'](NUM_PARALLEL))
 params = get_default_params(NUM_PARALLEL)
 inner_population = InnerPopulation(NUM_PARALLEL)
 

@@ -28,9 +28,7 @@ def make_field(shape=None):
 
 
 def make_flat(shape=None):
-    field = make_field(shape)
-    field.fill(0.0)
-    return field
+    return np.zeros(shape=expand_shape(shape), dtype=np.float16)
 
 
 def make_baym(shape=None):
@@ -44,10 +42,7 @@ def make_baym(shape=None):
     ramp_up_and_down[-ramp_down.size:] = ramp_down
 
     shape = expand_shape(shape)
-    field = make_field(shape)
-    field.from_numpy(
-        np.broadcast_to(np.expand_dims(ramp_up_and_down, 1), shape))
-    return field
+    return np.broadcast_to(np.expand_dims(ramp_up_and_down, 1), shape)
 
 
 # The named environments to experiment with.
@@ -66,5 +61,5 @@ if __name__ == '__main__':
 
     ti.init(ti.cuda, unrolling_limit=0)
 
-    render_env_map(STATIC_ENVIRONMENTS['baym']().to_numpy()[0])
+    render_env_map(STATIC_ENVIRONMENTS['baym']()[0])
     plt.show()

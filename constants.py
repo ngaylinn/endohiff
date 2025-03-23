@@ -21,6 +21,7 @@ POP_TILE_SIZE = 5
 CARRYING_CAPACITY = POP_TILE_SIZE ** 2
 
 # Constants configuring simulated evolution
+CROSSOVER_RATE = 0.5
 # The probability of flipping a bit is 1/(2**MUTATION_MAGNITUDE) ~= 0.016
 MUTATION_MAGNITUDE = 6
 INNER_GENERATIONS = 100
