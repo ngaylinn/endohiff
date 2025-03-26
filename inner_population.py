@@ -29,7 +29,6 @@ PARAMS_DTYPE = np.dtype([
     ('mortality_rate', np.float16),
     ('max_fertility', np.int8),
     ('tournament_size', np.int8),
-    ('sample_point', np.object_)
 ])
 
 
@@ -48,13 +47,12 @@ def get_default_params_numpy(shape=(1,)):
     params['mortality_rate'] = 0.25
     params['max_fertility'] = 25
     params['tournament_size'] = 2
-    params['sample_point'] = None
     return params
 
 
 # TODO: Maybe remove? The experiment no longer uses this, but it's still here
 # mostly because it's fun to look at (also for skew analysis, but that could be
-# a one-off, rather than storing one_count in all the logs). 
+# a one-off, rather than storing one_count in all the logs).
 @ti.func
 def count_ones(bitstr):
     one_count = ti.cast(0, ti.int8)
