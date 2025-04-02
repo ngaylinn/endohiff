@@ -2,6 +2,7 @@
 """
 
 from argparse import ArgumentParser
+from pathlib import Path
 from itertools import combinations
 import sys
 
@@ -23,7 +24,7 @@ def summarize_fitness(inner_log):
     ).group_by(
         'x', 'y'
     ).agg(
-        pl.col('fitness').mean().alias('Mean Fitness')
+        pl.col('fitness').mean().cast(pl.Float64).alias('Mean Fitness')
     # Drop the location data. We just want to make a histogram over locations
     # in the environment, so we need samples from each location, but don't need
     # to remember where the samples came from.
@@ -124,47 +125,27 @@ def compare_experiments(path, data, column, suffix=''):
         data, column, path / f'fitness_dist{suffix}.png')
 
 
-def main(verbose):
+def main(path):
     """Visualize comparisons between all the primary experiments.
     """
-    # Read the final fitness score data from all experiments that have been run.
-    all_data = get_aggregate_logs(verbose)
-    variants = all_data['variant'].unique()
-    environments = all_data['environment'].unique()
+    frames = []
+    for env_path in path.glob('*/'):
+        for trial_path in env_path.glob('*/'):
+            inner_log = pl.read_parquet(trial_path / 'inner_log.parquet')
+            frames.append(
+                summarize_fitness(inner_log).with_columns(
+                    Environment=pl.lit(env_path.stem)))
+    all_data = pl.concat(frames)
+    compare_experiments(path, all_data, 'Environment')
 
-    # Maybe show a progress bar as we generate files.
-    if verbose > 0:
-        print()
-        print('Charting comparisons...')
-        num_artifacts = len(variants) + len(environments)
-        tick_progress = trange(num_artifacts).update
-    else:
-        tick_progress = lambda: None
-
-    # For each variant (ie, w/ and w/o crossover, migration), compare
-    # performance of that variant across all environments.
-    for variant_name in variants:
-        variant_path = OUTPUT_PATH / variant_name
-        variant_path.mkdir(parents=True, exist_ok=True)
-
-        variant_data = all_data.filter(pl.col('variant') == variant_name)
-        compare_experiments(variant_path, variant_data, 'environment')
-        tick_progress()
-
-    # For each environment (ie, random, flat, baym), compare performance of all
-    # variants in that environment.
-    for env_name in environments:
-        env_data = all_data.filter(pl.col('environment') == env_name)
-        compare_experiments(OUTPUT_PATH, env_data, 'variant', f'_{env_name}')
-        tick_progress()
+    return 0
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Generate charts to compare results across experiment.')
     parser.add_argument(
-        '-v', '--verbose', type=int, default=1,
-        help='Verbosity level (1 is default, 0 for no output)')
+        'path', type=Path, help='Path to results from multiple experiments')
     args = vars(parser.parse_args())
 
     sys.exit(main(**args))

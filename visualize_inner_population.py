@@ -89,7 +89,7 @@ def chart_fitness_dist(path, inner_log):
     grid.despine(bottom=True, left=True)
     grid.figure.suptitle(f'Fitness score distribution')
     grid.figure.supylabel('Density')
-    grid.figure.savefig(path / 'fitness_dist.png', dpi=600)
+    grid.figure.savefig(path / 'inner_fitness.png', dpi=600)
     plt.close()
 
     # Restore the default colormap so we don't alter other charts generated

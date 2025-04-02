@@ -6,39 +6,35 @@ from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 import polars as pl
 import seaborn as sns
 from tqdm import trange
 
 from constants import NUM_TRIALS
+from visualize_inner_population import save_env_map
 
 
-def chart_outer_fitness(data, path, hue=None, suffix=''):
+def chart_outer_fitness(data, path, hue=None):
     sns.relplot(data=data, x='Generation', y='Fitness', kind='line', hue=hue)
-    plt.savefig(path / f'outer_fitness{suffix}.png', dpi=600)
+    plt.savefig(path / f'outer_fitness.png', dpi=600)
 
 
 def main(path, verbose):
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
-        num_artifacts = NUM_TRIALS + 2
+        num_artifacts = NUM_TRIALS + 1
         tick_progress = trange(num_artifacts).update
     else:
         tick_progress = lambda: None
 
-    all_data = pl.read_parquet(path / 'outer_log.parquet')
-
-    # Load and chart data for each trial separately.
-    for t in range(NUM_TRIALS):
-        trial_path = path / f'trial{t}'
-        trial_data = all_data.filter(pl.col('Trial') == t)
-        chart_outer_fitness(trial_data, trial_path)
+    for trial in range(NUM_TRIALS):
+        env_data = np.load(path / f'cppn_{trial}.npy')
+        save_env_map(path, env_data, f'cppn_{trial}')
         tick_progress()
 
-    # Chart data from all trials, both aggregated and broken down by trial.
-    chart_outer_fitness(all_data, path)
-    tick_progress()
-    chart_outer_fitness(all_data, path, hue='Trial', suffix='_by_trial')
+    all_data = pl.read_parquet(path / 'outer_log.parquet')
+    chart_outer_fitness(all_data, path, hue='Trial')
     tick_progress()
 
     # Indicate the program completed successfully.
