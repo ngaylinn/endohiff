@@ -10,17 +10,26 @@ import taichi as ti
 from tqdm import trange
 
 from constants import (
-    CARRYING_CAPACITY, ENVIRONMENT_SHAPE, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
+    CARRYING_CAPACITY, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
     OUTPUT_PATH)
-from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_field, make_flat
+from environments import (
+    ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_field, make_flat)
 from inner_population import InnerPopulation, get_default_params_numpy, Params
 from outer_population import OuterPopulation
 from outer_fitness import FitnessEvaluator, get_per_trial_scores
 
-ti.init(ti.cuda, unrolling_limit=0)
-
 SWEEP_SIZE = CARRYING_CAPACITY
 SWEEP_SHAPE = (SWEEP_SIZE, SWEEP_SIZE)
+# SWEEP_KINDS = ['selection', 'ratchet']
+SWEEP_KINDS = ['selection']
+
+def all_sweep_sample_dirs():
+    summaries = []
+    for sweep_kind in SWEEP_KINDS:
+        summaries.extend(
+            [f'{sweep_kind}_sweep/{summaries}' for summaries in
+             Sweep(sweep_kind).enumerate_sample_summaries()])
+    return summaries
 
 
 class Param:
@@ -83,6 +92,12 @@ class Sweep:
         p2_key = self.param2.key
         p2_label = self.param2.labels[i2]
         return f'{p1_key}_{p1_label}_{p2_key}_{p2_label}'
+
+    # TODO: using the prefix "iter" is more traditional.
+    def enumerate_sample_summaries(self):
+        for i1 in self.param1.sample_points:
+            for i2 in self.param2.sample_points:
+                yield self.summary(i1, i2)
 
     def enumerate_batched(self):
         # For each setting of param1, return a batch of param settings and
@@ -147,7 +162,8 @@ def bitstr_sweep(sweep, env_data, path, env_name):
 
                 # Record the environment and the full bitstring evolution log
                 # for all trials with these hyperparameter settings.
-                sample_path = path / sweep.summary(i1, i2)/ env_name / f'trial_{t}'
+                sample_path = (
+                    path / sweep.summary(i1, i2) / env_name / f'trial_{t}')
                 sample_path.mkdir(exist_ok=True, parents=True)
                 np.save(sample_path / 'env.npy', env_data[i1, i2])
                 inner_log = inner_population.get_logs(e)
@@ -276,6 +292,8 @@ def compare_envs(sweep, path):
 
 
 def main(env_name, sweep_kind):
+    ti.init(ti.cuda, unrolling_limit=0)
+
     path = OUTPUT_PATH / f'{sweep_kind}_sweep'
     path.mkdir(exist_ok=True, parents=True)
     sweep = Sweep(sweep_kind)
@@ -294,7 +312,7 @@ if __name__ == '__main__':
         'env_name', type=str, choices=ALL_ENVIRONMENT_NAMES,
         help='Which environment to use for this experiment.')
     parser.add_argument(
-        'sweep_kind', type=str, choices=['selection', 'ratchet'],
+        'sweep_kind', type=str, choices=SWEEP_KINDS,
         help='Which set of hyperparameters to sweep over.')
     args = vars(parser.parse_args())
 

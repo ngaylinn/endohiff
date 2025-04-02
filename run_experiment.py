@@ -23,10 +23,6 @@ from inner_population import InnerPopulation, get_default_params
 from outer_population import OuterPopulation
 from outer_fitness import FitnessEvaluator, get_best_trial
 
-# We store weights in a vector, which Taichi warns could cause slow compile
-# times. In practice, this doesn't seem like a problem, so disable the warning.
-ti.init(ti.cuda, unrolling_limit=0)
-
 
 def get_variant_name(migration, crossover):
     return f'migration_{migration}_crossover_{crossover}'
@@ -158,6 +154,10 @@ def run_experiment_evolved_env(migration, crossover, verbose):
 
 
 def main(env_name, migration, crossover, verbose):
+    # We store weights in a vector, which Taichi warns could cause slow compile
+    # times. In practice, this doesn't seem like a problem, so disable the warning.
+    ti.init(ti.cuda, unrolling_limit=0)
+
     if env_name == 'cppn':
         run_experiment_evolved_env(migration, crossover, verbose)
     else:
