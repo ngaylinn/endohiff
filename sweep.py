@@ -176,11 +176,12 @@ def environment_sweep(sweep, path):
     for params_data, sweep_index, sample in sweep.enumerate():
         for og in range(OUTER_GENERATIONS):
             env = outer_population.make_environments()
-            params.from_numpy(params_data)
+            params.from_numpy(params_data.repeat(sims_per_batch))
             inner_population.evolve(env, params)
             evaluator.score_populations(inner_population, og)
             if og + 1 < OUTER_GENERATIONS:
                 outer_population.propagate(og)
+            progress.update()
 
         # TODO: The results actually look really noisy! Occasionally we
         # get abysmal performance for a single configuration, when its
@@ -193,12 +194,11 @@ def environment_sweep(sweep, path):
 
         if sample:
             sample_path = path / sweep.summary(*sweep_index)/ 'cppn'
+            sample_path.mkdir(exist_ok=True, parents=True)
             outer_population.get_logs().write_parquet(sample_path / 'outer_log.parquet')
             for t, e in enumerate(evaluator.get_best_per_trial(og)):
-                is_best = '_best' if t == best_trial else ''
-                np.save(sample_path / f'cppn_{t}{is_best}.npy', env_data[e])
+                np.save(sample_path / f'cppn_{t}.npy', env_data[e])
 
-        progress.update()
 
     return best_envs
 
