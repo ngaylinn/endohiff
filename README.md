@@ -7,6 +7,8 @@ landscape, we hypothesize the host can influence the evolutionary trajectory of
 its symbionts and lead them to achieve higher fitness scores than they would in
 a non-agential environment.
 
+***This is a work in progress! Our code is currently lagging behind what was used to generate the results in our paper, and is in need of significant refactoring. Many improvements coming soon.***
+
 ## Usage
 
 To run the code in this project, you must install the dependencies listed in
