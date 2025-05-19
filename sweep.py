@@ -20,8 +20,7 @@ from outer_fitness import FitnessEvaluator, get_per_trial_scores
 
 SWEEP_SIZE = CARRYING_CAPACITY
 SWEEP_SHAPE = (SWEEP_SIZE, SWEEP_SIZE)
-# SWEEP_KINDS = ['selection', 'ratchet']
-SWEEP_KINDS = ['selection']
+SWEEP_KINDS = ['selection', 'ratchet']
 
 
 def all_sweep_sample_dirs():
@@ -29,14 +28,14 @@ def all_sweep_sample_dirs():
     for sweep_kind in SWEEP_KINDS:
         summaries.extend(
             [f'{sweep_kind}_sweep/{summaries}' for summaries in
-             Sweep(sweep_kind).enumerate_sample_summaries()])
+             Sweep(sweep_kind).iter_sample_summaries()])
     return summaries
 
 
 class Param:
     """Represents a single hyperparameter we might sweep over.
     """
-    def __init__(self, key, values, sample_points):
+    def __init__(self, key, values):
         self.key = key
         self.name = key.title().replace('_', ' ')
         self.values = values
@@ -44,7 +43,6 @@ class Param:
             self.labels = [f'{val:0.3f}' for val in self.values]
         else:
             self.labels = self.values
-        self.sample_points = np.array(sample_points)
 
 
 class Sweep:
@@ -55,17 +53,21 @@ class Sweep:
         if sweep_kind == 'selection':
             self.param1 = Param(
                 'mortality_rate',
-                np.linspace(0, 1, SWEEP_SIZE), [0, 15, 22])
+                np.linspace(0, 1, SWEEP_SIZE))
             self.param2 = Param(
                 'tournament_size',
-                np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1, [0, 2, 12])
+                np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1)
+            self.sample_points = np.array(
+                [[3, 5], [1, 10], [0, 18], [8, 18], [12, 10], [16, 18]])
         elif sweep_kind == 'ratchet':
             self.param1 = Param(
                 'migration_rate',
-                np.linspace(0, 3, SWEEP_SIZE), [1, 3, 12])
+                np.linspace(0, 3, SWEEP_SIZE))
             self.param2 = Param(
                 'fertility_rate',
-                np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1, [3, 6, 12])
+                np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1)
+            self.sample_points = np.array(
+                [[1, 2], [1, 6], [5, 2], [5, 6], [12, 2], [12, 6]])
 
     def labels(self):
         # Format param values for rendering in a Seaborn heatmap
@@ -73,17 +75,6 @@ class Sweep:
             'xticklabels': self.param1.labels,
             'yticklabels': self.param2.labels,
         }
-
-    def sample_points(self):
-        # Each hyperparameter has a number of sample points associated with it.
-        # We record the full history of simulations with those hyperparameters.
-        # This function summarizes all the sample points in the 2D space
-        # defined by both hyperparameters in the sweep.
-        x_points = self.param1.sample_points
-        y_points = self.param2.sample_points
-        return np.array((
-            x_points.repeat(len(y_points)),
-            np.tile(y_points, len(x_points))))
 
     def summary(self, i1, i2):
         # Generate a text summary of the hyperparameters with the given indices
@@ -94,13 +85,11 @@ class Sweep:
         p2_label = self.param2.labels[i2]
         return f'{p1_key}_{p1_label}_{p2_key}_{p2_label}'
 
-    # TODO: using the prefix "iter" is more traditional.
-    def enumerate_sample_summaries(self):
-        for i1 in self.param1.sample_points:
-            for i2 in self.param2.sample_points:
-                yield self.summary(i1, i2)
+    def iter_sample_summaries(self):
+        for i1, i2 in self.sample_points:
+            yield self.summary(i1, i2)
 
-    def enumerate_batched(self):
+    def iter_batched(self):
         # For each setting of param1, return a batch of param settings and
         # sample points sweeping all values of param2.
         params = get_default_params_numpy(SWEEP_SIZE)
@@ -109,20 +98,18 @@ class Sweep:
             samples = []
             for i2 in range(SWEEP_SIZE):
                 params[self.param2.key][i2] = self.param2.values[i2]
-                if all((i1 in self.param1.sample_points,
-                        i2 in self.param2.sample_points)):
+                if any(np.all(self.sample_points == [i1, i2], axis=1)):
                     samples.append(i2)
             yield (params, i1, samples)
 
-    def enumerate(self):
+    def iter(self):
         # Enumerate all combinations of settings for both param1 and param2,
         # one at a time.
         params = get_default_params_numpy(1)
         for i1, i2 in np.ndindex(*SWEEP_SHAPE):
             params[self.param1.key] = self.param1.values[i1]
             params[self.param2.key] = self.param2.values[i2]
-            sample = (i1 in self.param1.sample_points and
-                      i2 in self.param2.sample_points)
+            sample = any(np.all(self.sample_points == [i1, i2], axis=1))
             yield (params, (i1, i2), sample)
 
 
@@ -137,7 +124,7 @@ def bitstr_sweep(sweep, env_data, path, env_name):
     print('Evolving bitstrings for all parameters...')
     progress = trange(SWEEP_SIZE)
     frames = []
-    for params_data, i1, samples in sweep.enumerate_batched():
+    for params_data, i1, samples in sweep.iter_batched():
         # Evolve a population for each batch of parameter settings, NUM_TRIALS
         # times in parallel.
         env.from_numpy(env_data[i1].repeat(NUM_TRIALS, axis=0))
@@ -189,8 +176,8 @@ def environment_sweep(sweep, path):
 
     print('Evolving environments for all parameters...')
     progress = trange(SWEEP_SIZE * SWEEP_SIZE * OUTER_GENERATIONS)
-    outer_population.randomize()
-    for params_data, sweep_index, sample in sweep.enumerate():
+    for params_data, sweep_index, sample in sweep.iter():
+        outer_population.randomize()
         for og in range(OUTER_GENERATIONS):
             env = outer_population.make_environments()
             params.from_numpy(params_data.repeat(sims_per_batch))
@@ -206,8 +193,15 @@ def environment_sweep(sweep, path):
         # environments from this large population that are more
         # reliable, and not just the ones that did best in one trial.
         env_data = env.to_numpy()
-        best_trial = evaluator.get_best_trial(og)
-        best_envs[sweep_index] = env_data[best_trial]
+
+        outer_fitness = outer_population.matchmaker.fitness.to_numpy()[-1]
+        best_trial = outer_fitness.sum(axis=1).argmax()
+        median_outer_fitness = sorted(outer_fitness[best_trial])[
+            OUTER_POPULATION_SIZE//2]
+        best_index = np.where(
+            outer_fitness[best_trial] == median_outer_fitness)[0][0]
+        e = best_trial * OUTER_POPULATION_SIZE + best_index
+        best_envs[sweep_index] = env_data[e]
 
         if sample:
             sample_path = path / sweep.summary(*sweep_index)/ 'cppn'
@@ -215,7 +209,6 @@ def environment_sweep(sweep, path):
             outer_population.get_logs().write_parquet(sample_path / 'outer_log.parquet')
             for t, e in enumerate(evaluator.get_best_per_trial(og)):
                 np.save(sample_path / f'cppn_{t}.npy', env_data[e])
-
 
     return best_envs
 
@@ -256,7 +249,7 @@ def pivot(sweep, data):
 
 
 def draw_sample_points(sweep):
-    x_points, y_points = sweep.sample_points() + 0.5
+    x_points, y_points = sweep.sample_points.T + 0.5
     plt.plot(x_points, y_points, 'kx', ms=10)
 
 
@@ -289,6 +282,18 @@ def compare_envs(sweep, path):
         plt.suptitle(f'{env_name2} - {env_name1}')
         plt.tight_layout()
         plt.savefig(path / f'{env_name2}_vs_{env_name1}.png', dpi=600)
+        plt.close()
+
+    if all((env_name in data for env_name in ['flat', 'baym', 'cppn'])):
+        flat = pivot(sweep, data['flat'])
+        baym = pivot(sweep, data['baym'])
+        cppn = pivot(sweep, data['cppn'])
+        cppn_marginal = cppn - np.max([flat, baym], axis=0)
+        sns.heatmap(cppn_marginal, **sweep.labels(), center=0, cmap='Spectral')
+        draw_sample_points(sweep)
+        plt.suptitle('cppn - max(flat, baym)')
+        plt.tight_layout()
+        plt.savefig(path / 'cppn_vs_both.png', dpi=600)
         plt.close()
 
 

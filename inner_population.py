@@ -11,7 +11,8 @@ import polars as pl
 import taichi as ti
 
 from constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE, INNER_GENERATIONS)
+    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, CROSSOVER_RATE,
+    ENVIRONMENT_SHAPE, INNER_GENERATIONS)
 from inner_fitness import score_hiff
 from reproduction import mutation, crossover, TournamentArena
 
@@ -20,14 +21,14 @@ from reproduction import mutation, crossover, TournamentArena
 class Params:
     migration_rate: ti.float16
     mortality_rate: ti.float16
-    max_fertility: ti.int8
+    fertility_rate: ti.int8
     tournament_size: ti.int8
 
 
 PARAMS_DTYPE = np.dtype([
     ('migration_rate', np.float16),
     ('mortality_rate', np.float16),
-    ('max_fertility', np.int8),
+    ('fertility_rate', np.int8),
     ('tournament_size', np.int8),
 ])
 
@@ -35,18 +36,18 @@ PARAMS_DTYPE = np.dtype([
 def get_default_params(shape=(1,)):
     field = Params.field(shape=shape)
     field.migration_rate.fill(1.0)
-    field.mortality_rate.fill(0.25)
-    field.max_fertility.fill(25)
-    field.tournament_size.fill(2)
+    field.mortality_rate.fill(0.125)
+    field.fertility_rate.fill(25)
+    field.tournament_size.fill(6)
     return field
 
 
 def get_default_params_numpy(shape=(1,)):
     params = np.empty(shape, dtype=PARAMS_DTYPE)
     params['migration_rate'] = 1.0
-    params['mortality_rate'] = 0.25
-    params['max_fertility'] = 25
-    params['tournament_size'] = 2
+    params['mortality_rate'] = 0.125
+    params['fertility_rate'] = 25
+    params['tournament_size'] = 6
     return params
 
 
@@ -145,7 +146,7 @@ class InnerPopulation:
         num_children = ti.atomic_add(self.num_children[e, x, y, i], 1)
         child = Individual()
         # If this parent hasn't had too many already, generate a new child.
-        if num_children + 1 < params[e].max_fertility:
+        if num_children + 1 < params[e].fertility_rate:
             # Do crossover if a mate index was specified.
             if m >= 0:
                 # Lookup the mate from generation g to populate a child in

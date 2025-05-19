@@ -14,7 +14,7 @@ from constants import (
 @ti.data_oriented
 class FitnessEvaluator:
     def __init__(self, count=1, outer_population=None):
-        # If there is no outer population, then assume we've got NUM_TRIALS
+        # If there is no outer population, then assume we've got count
         # inner_populations to work with and set up some fields that can play
         # the same role as the index and matchmaker in an outer population.
         if outer_population is None:
@@ -40,24 +40,52 @@ class FitnessEvaluator:
         return self.fitness[og, t, i]
 
     @ti.kernel
-    def score_populations(self, inner_population: ti.template(), og: int):
-        ig = INNER_GENERATIONS - 1
-        shape = (self.num_environments,) + ENVIRONMENT_SHAPE
-        # For every location in every environment across all trials...
-        for e, x, y in ti.ndrange(*shape):
-            # Count all the individuals here and their fitness.
-            alive_count = 0.0
-            fitness_sum = 0.0
-            for i in range(CARRYING_CAPACITY):
-                individual = inner_population.pop[e, ig, x, y, i]
+    def get_max_score(self, inner_population: ti.template(), og: int):
+        shape = (self.num_environments, INNER_GENERATIONS) + ENVIRONMENT_SHAPE
+        # For every location in every environment across all trials and
+        # generations...
+        for e, ig, x, y in ti.ndrange(*shape):
+            t, oi = self.index[e]
+            local_max_fitness = 0.0
+
+            # Find the most fit individual in this local population and compare
+            # that to the max score for this environment.
+            for ii in ti.ndrange(INNER_GENERATIONS, CARRYING_CAPACITY):
+                individual = inner_population.pop[e, ig, x, y, ii]
                 if individual.is_alive():
-                    alive_count += 1
-                    fitness_sum += individual.fitness
-            # Compute averages for all four kinds at once, storing 0.0 for any
-            # locations with no living individuals.
-            local_fitness = ti.select(
-                alive_count > 0, fitness_sum / alive_count, 0.0)
-            self.inc_fitness(e, og, local_fitness)
+                    local_max_fitness = max(local_max_fitness,
+                                            individual.fitness)
+            ti.atomic_max(self.fitness[og, t, oi], local_max_fitness)
+
+    @ti.kernel
+    def get_first_instance(self, inner_population: ti.template(), og: int):
+        shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
+        # For every environment across all trials...
+        for e in range(self.num_environments):
+            t, oi = self.index[e]
+            global_max_fitness = self.fitness[og, t, oi]
+
+            # For each generation...
+            for ig in range(INNER_GENERATIONS):
+                # Find the best fitness score in this generation.
+                local_max_fitness = 0.0
+                for x, y, ii in ti.ndrange(*shape):
+                    individual = inner_population.pop[e, ig, x, y, ii]
+                    if individual.is_alive():
+                        local_max_fitness = max(local_max_fitness,
+                                                individual.fitness)
+                # If it matches the global max score, then this is when the
+                # global max score first arose. Adjust the score accordingly.
+                if local_max_fitness == global_max_fitness:
+                    earliness = (INNER_GENERATIONS - ig) / INNER_GENERATIONS
+                    # HIFF is an integral fitness function so this earliness
+                    # factor only serves to break ties.
+                    self.fitness[og, t, oi] = global_max_fitness + earliness
+                    break
+
+    def score_populations(self, inner_population, og):
+        self.get_max_score(inner_population, og)
+        self.get_first_instance(inner_population, og)
 
     @ti.kernel
     def get_best_per_trial(self, og: int) -> ti.types.vector(n=NUM_TRIALS, dtype=int):
