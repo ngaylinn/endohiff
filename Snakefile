@@ -22,16 +22,19 @@ rule all:
     expand('output/{sweep_sample_dir}/cppn/cppn_{trial}.png',
            sweep_sample_dir=SAMPLE_DIRS, trial=TRIALS),
     expand('output/{sweep_sample_dir}/cppn/outer_fitness.png',
-           sweep_sample_dir=SAMPLE_DIRS, trial=TRIALS),
-    expand('output/{sweep_sample_dir}/fitness_dist.png',
-           sweep_sample_dir=SAMPLE_DIRS, trial=TRIALS),
+           sweep_sample_dir=SAMPLE_DIRS),
+    expand('output/{sweep_sample_dir}/fitness.png',
+           sweep_sample_dir=SAMPLE_DIRS),
+    expand('output/{sweep_sample_dir}/final_fitness.png',
+           sweep_sample_dir=SAMPLE_DIRS),
     expand('output/{sweep_sample_dir}/mannwhitneyu.txt',
-           sweep_sample_dir=SAMPLE_DIRS, trial=TRIALS),
-    expand('output/{sweep_kind}_sweep/{env_name}.png',
-           sweep_kind=SWEEP_KINDS, env_name=ENV_NAMES),
-    expand('output/{sweep_kind}_sweep/baym_vs_flat.png', sweep_kind=SWEEP_KINDS),
-    expand('output/{sweep_kind}_sweep/cppn_vs_baym.png', sweep_kind=SWEEP_KINDS),
-    expand('output/{sweep_kind}_sweep/cppn_vs_flat.png', sweep_kind=SWEEP_KINDS),
+           sweep_sample_dir=SAMPLE_DIRS),
+#    expand('output/{sweep_kind}_sweep/{env_name}.png',
+#           sweep_kind=SWEEP_KINDS, env_name=ENV_NAMES),
+#    expand('output/{sweep_kind}_sweep/baym_vs_flat.png', sweep_kind=SWEEP_KINDS),
+#    expand('output/{sweep_kind}_sweep/cppn_vs_baym.png', sweep_kind=SWEEP_KINDS),
+#    expand('output/{sweep_kind}_sweep/cppn_vs_flat.png', sweep_kind=SWEEP_KINDS),
+#    expand('output/{sweep_kind}_sweep/cppn_vs_both.png', sweep_kind=SWEEP_KINDS),
 
     # TODO: Restore secondary figures!
 
@@ -67,8 +70,10 @@ rule compare_environments:
     expand('{{path}}/{env_name}/trial_{trial}/inner_log.parquet',
            env_name=ENV_NAMES, trial=TRIALS),
   output:
-    '{path}/fitness_dist.png',
+    '{path}/fitness.png',
+    '{path}/final_fitness.png',
     '{path}/mannwhitneyu.txt',
+    expand('{{path}}/{env_name}/env_fitness.png', env_name=ENV_NAMES),
   params: '{path}'
   shell: 'python3 ./compare_experiments.py {params}'
 

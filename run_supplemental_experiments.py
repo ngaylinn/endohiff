@@ -18,6 +18,7 @@ ti.init(ti.cuda, unrolling_limit=0)
 def make_stretched(shape=None):
     # Ramp up and down like Baym, but make the "step" that got the highest
     # fitness scores much, much wider.
+
     ramp_up_and_down = np.array([
          64,  64, 128, 128, 192, 192, 256, 256,
         320, 320, 320, 320, 320, 320, 320, 320,
@@ -27,7 +28,6 @@ def make_stretched(shape=None):
         320, 320, 320, 320, 320, 320, 320, 320,
         320, 320, 320, 320, 320, 320, 320, 320,
         256, 256, 192, 192, 128, 128,  64,  64])
-
     shape = expand_shape(shape)
     return np.broadcast_to(np.expand_dims(ramp_up_and_down, 1), shape)
 
@@ -39,14 +39,38 @@ def make_noramp(shape=None):
     return np.full(shape, 320)
 
 
+def make_gap(shape=None):
+    shape = expand_shape(shape)
+    steep = np.full(shape, 320)
+    steep[0,    :5 ] = 64
+    steep[0,   5:10] = 128
+    steep[0,  25:30] = 384
+    steep[0,  30:34] = 448
+    steep[0,  34:39] = 384
+    steep[0, -10:-5] = 128
+    steep[0,  -5:  ] = 64
+    return steep
+
+
+def make_high(shape=None):
+    shape = expand_shape(shape)
+    high = np.full(shape, 320)
+    high[0,   :25] = 320
+    high[0, 25:30] = 384
+    high[0, 30:34] = 448
+    high[0, 34:39] = 384
+    high[0, 39:  ] = 320
+    return high
+
+
 def baym_variants():
     print('Testing effect of tweaking the baym environment.')
 
     path = OUTPUT_PATH / 'baym_variants'
     environments = {
         'baym': make_baym,
-        'stretched': make_stretched,
-        'no_ramp': make_noramp,
+        'gap': make_gap,
+        'high': make_high,
     }
     logs = {}
 
@@ -68,16 +92,18 @@ def baym_variants():
     # Merge the logs from the baym and stretched conditions so we can compare
     # them head-to-head.
     head_to_head = pl.concat((
-        logs['baym'].with_columns(environment=pl.lit('baym')),
-        logs['stretched'].with_columns(environment=pl.lit('stretched'))
-    )).filter(
-        pl.col('alive') & (pl.col('Generation') == INNER_GENERATIONS - 1)
-    ).group_by(
-        'environment', 'x', 'y'
-    ).agg(
-        pl.col('fitness').mean().alias('Mean Fitness')
+        logs['baym'].with_columns(Environment=pl.lit('baym')),
+        logs['gap'].with_columns(Environment=pl.lit('gap')),
+        logs['high'].with_columns(Environment=pl.lit('high'))
     )
-    compare_experiments(path, head_to_head, 'environment')
+    #).filter(
+    #    pl.col('alive') & (pl.col('Generation') == INNER_GENERATIONS - 1)
+    #).group_by(
+    #    'environment', 'x', 'y'
+    #).agg(
+    #    pl.col('fitness').mean().alias('Mean Fitness')
+    )
+    compare_experiments(path, head_to_head)
 
 
 if __name__ == '__main__':

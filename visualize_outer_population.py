@@ -17,7 +17,7 @@ from visualize_inner_population import save_env_map
 
 def chart_outer_fitness(data, path, hue=None):
     sns.relplot(data=data, x='Generation', y='Fitness', kind='line', hue=hue)
-    plt.savefig(path / f'outer_fitness.png', dpi=600)
+    plt.savefig(path / f'outer_fitness.png', dpi=300)
 
 
 def main(path, verbose):

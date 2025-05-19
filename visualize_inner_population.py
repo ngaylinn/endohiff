@@ -17,6 +17,10 @@ from tqdm import trange
 from constants import (
     BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF, POP_TILE_SIZE)
 
+ENV_PALETTE = 'mako'
+POP_PALETTE = 'rocket'
+ONE_FRAC_PALETTE = 'Spectral'
+
 
 # Making ridgeplots with Seaborn generates lots of these warnings.
 warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
@@ -76,7 +80,7 @@ def chart_fitness_dist(path, inner_log):
     def plot_ridge(x, color, label):
         ax = plt.gca()
         color = plt.cm.viridis(x.mean() / MAX_HIFF)
-        sns.kdeplot(x=x, color=color, fill=True, warn_singular=False)
+        sns.kdeplot(x=x, color=color, alpha=1.0, fill=True, warn_singular=False)
         ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
                 transform=ax.transAxes)
     grid.map(plot_ridge, 'Mean Fitness')
@@ -88,21 +92,18 @@ def chart_fitness_dist(path, inner_log):
     grid.set(yticks=[], ylabel='')
     grid.despine(bottom=True, left=True)
     grid.figure.suptitle(f'Fitness score distribution')
-    grid.figure.supylabel('Density')
-    grid.figure.savefig(path / 'inner_fitness.png', dpi=600)
+    grid.figure.savefig(path / 'inner_fitness.png', dpi=300)
     plt.close()
-
-    # Restore the default colormap so we don't alter other charts generated
-    # after this one.
     plt.set_cmap('viridis')
 
 
-def render_map_decorations(tile_size=1):
+def render_map_decorations(title, tile_size=1):
     """Set up and add label a figure for rendering a spatial map.
 
     This assumes data being rendered is tile_size * ENVIRONMENT_SHAPE and draws
     a tick mark for every 4th row / column in the environment.
     """
+    plt.suptitle(title)
     plt.colorbar()
     plt.xlabel('Grid Column')
     plt.ylabel('Grid Row')
@@ -117,24 +118,31 @@ def render_map_decorations(tile_size=1):
     plt.xticks(ticks=labels[0] * tile_size - 0.5, labels=labels[0])
     plt.yticks(ticks=labels[1] * tile_size - 0.5, labels=labels[1])
     plt.grid(color='k')
+    plt.tight_layout()
+
+
+def frameless_figure():
+    fig = plt.figure(frameon=False, figsize=(16, 9))
+    ax = plt.Axes(fig, [0, 0, 1, 1])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    return fig
 
 
 def render_env_map(env_data):
     """Render a map of minimum fitness values in an environment.
     """
-    plt.figure(figsize=(8, 4.5))
-    plt.imshow(env_data.transpose())
+    frameless_figure()
+    plt.imshow(env_data.transpose(), plt.get_cmap(ENV_PALETTE))
     plt.clim(0, MAX_HIFF)
-    render_map_decorations()
-    plt.suptitle(f'Environment Min Fitness')
-    plt.tight_layout()
+    # render_map_decorations('Environment Min Fitness')
 
 
 def save_env_map(path, env_data, name='env_map'):
     """Summarize an environment with maps for min fitness and substr weights.
     """
     render_env_map(env_data)
-    plt.savefig(path / f'{name}.png', dpi=600)
+    plt.savefig(path / f'{name}.png', dpi=20)
     plt.close()
 
 
@@ -161,40 +169,36 @@ def spatialize_pop_data(pop_data):
 
 
 def render_fitness_map(inner_log):
-    plt.figure(figsize=(8, 4.5))
+    frameless_figure()
     pop_data = get_masked_column_data(inner_log, 'fitness')
     plt.imshow(spatialize_pop_data(pop_data),
-               plt.get_cmap().with_extremes(bad='black'))
+               plt.get_cmap(POP_PALETTE).with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
-    render_map_decorations(POP_TILE_SIZE)
-    plt.suptitle(f'HIFF score map')
-    plt.tight_layout()
+    # render_map_decorations('HIFF score map', POP_TILE_SIZE)
 
 
 def save_fitness_map(path, inner_log):
     """Render a static map of final fitness scores from a population.
     """
     render_fitness_map(inner_log)
-    plt.savefig(path / 'fitness_map.png', dpi=600)
+    plt.savefig(path / 'fitness_map.png', dpi=300)
     plt.close()
 
 
 def render_one_frac_map(inner_log):
-    plt.figure(figsize=(8, 4.5))
+    frameless_figure()
     pop_data = get_masked_column_data(inner_log, 'one_count') / BITSTR_LEN
     plt.imshow(spatialize_pop_data(pop_data),
-               cmap=plt.get_cmap('Spectral').with_extremes(bad='black'))
+               cmap=plt.get_cmap(ONE_FRAC_PALETTE).with_extremes(bad='black'))
     plt.clim(0.0, 1.0)
-    render_map_decorations(POP_TILE_SIZE)
-    plt.suptitle(f'Bit ratio map')
-    plt.tight_layout()
+    # render_map_decorations('Bit ratio map', POP_TILE_SIZE)
 
 
 def save_one_frac_map(path, inner_log):
     """Render a static map of a population's ratio of 1s to 0s.
     """
     render_one_frac_map(inner_log)
-    plt.savefig(path / 'one_frac_map.png', dpi=600)
+    plt.savefig(path / 'one_frac_map.png', dpi=300)
     plt.close()
 
 
@@ -206,15 +210,11 @@ def save_fitness_animation(path, inner_log, gif=True):
         inner_log, 'fitness'
     ).reshape(INNER_GENERATIONS, -1)
 
-    # Set up a figure with no decorations or padding.
-    fig = plt.figure(frameon=False, figsize=(16, 9))
-    ax = plt.Axes(fig, [0, 0, 1, 1])
-    ax.set_axis_off()
-    fig.add_axes(ax)
+    fig = frameless_figure()
 
     # Render the first frame, and make an animation for the rest.
     image = plt.imshow(spatialize_pop_data(fitness_by_generation[0]),
-                       plt.get_cmap().with_extremes(bad='black'))
+                       plt.get_cmap(POP_PALETTE).with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
     def animate_func(generation):
         image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
@@ -236,15 +236,11 @@ def save_one_frac_animation(path, inner_log, gif=True):
         inner_log, 'one_count'
     ).reshape(INNER_GENERATIONS, -1) / BITSTR_LEN
 
-    # Set up a figure with no decorations or padding.
-    fig = plt.figure(frameon=False, figsize=(16, 9))
-    ax = plt.Axes(fig, [0, 0, 1, 1])
-    ax.set_axis_off()
-    fig.add_axes(ax)
+    fig = frameless_figure()
 
     # Render the first frame, and make an animation for the rest.
     image = plt.imshow(spatialize_pop_data(one_frac_by_generation[0]),
-                       plt.get_cmap('Spectral').with_extremes(bad='black'))
+                       plt.get_cmap(ONE_FRAC_PALETTE).with_extremes(bad='black'))
     plt.clim(0.0, 1.0)
     def animate_func(generation):
         image.set_array(spatialize_pop_data(one_frac_by_generation[generation]))
@@ -268,25 +264,25 @@ def visualize_experiment(path, inner_log, env_data, verbose=1):
     else:
         tick_progress = lambda: None
 
-    save_one_frac_animation(path, inner_log)
-    tick_progress()
+    #save_one_frac_animation(path, inner_log)
+    #tick_progress()
 
-    save_fitness_animation(path, inner_log)
-    tick_progress()
+    #save_fitness_animation(path, inner_log)
+    #tick_progress()
 
-    chart_fitness_dist(path, inner_log)
-    tick_progress()
+    #chart_fitness_dist(path, inner_log)
+    #tick_progress()
 
     # Restrict to the last generation and render still maps of the final state.
     inner_log = inner_log.filter(
         pl.col('Generation') == INNER_GENERATIONS - 1
     )
 
-    save_one_frac_map(path, inner_log)
-    tick_progress()
+    #save_one_frac_map(path, inner_log)
+    #tick_progress()
 
-    save_fitness_map(path, inner_log)
-    tick_progress()
+    #save_fitness_map(path, inner_log)
+    #tick_progress()
 
     save_env_map(path, env_data)
     tick_progress()

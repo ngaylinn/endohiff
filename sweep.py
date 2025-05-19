@@ -9,6 +9,7 @@ import seaborn as sns
 import taichi as ti
 from tqdm import trange
 
+from compare_experiments import HUE_ORDER
 from constants import (
     CARRYING_CAPACITY, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
     OUTPUT_PATH)
@@ -16,7 +17,7 @@ from environments import (
     ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_field, make_flat)
 from inner_population import InnerPopulation, get_default_params_numpy, Params
 from outer_population import OuterPopulation
-from outer_fitness import FitnessEvaluator, get_per_trial_scores
+from outer_fitness import MAX_OUTER_FITNESS, FitnessEvaluator, get_per_trial_scores
 
 SWEEP_SIZE = CARRYING_CAPACITY
 SWEEP_SHAPE = (SWEEP_SIZE, SWEEP_SIZE)
@@ -193,22 +194,22 @@ def environment_sweep(sweep, path):
         # environments from this large population that are more
         # reliable, and not just the ones that did best in one trial.
         env_data = env.to_numpy()
+        best_trial = evaluator.get_best_trial(og)
+        best_envs[sweep_index] = env_data[best_trial]
 
-        outer_fitness = outer_population.matchmaker.fitness.to_numpy()[-1]
-        best_trial = outer_fitness.sum(axis=1).argmax()
-        median_outer_fitness = sorted(outer_fitness[best_trial])[
-            OUTER_POPULATION_SIZE//2]
-        best_index = np.where(
-            outer_fitness[best_trial] == median_outer_fitness)[0][0]
-        e = best_trial * OUTER_POPULATION_SIZE + best_index
-        best_envs[sweep_index] = env_data[e]
-
+        # TODO: This is doing something a little non-sensical. There are
+        # actually several sample points per trial, but we're just saving them
+        # all according to their trial #. Either we should save the env from
+        # the best trial in all sample conditions, or the best env for each
+        # trial.
         if sample:
             sample_path = path / sweep.summary(*sweep_index)/ 'cppn'
             sample_path.mkdir(exist_ok=True, parents=True)
             outer_population.get_logs().write_parquet(sample_path / 'outer_log.parquet')
             for t, e in enumerate(evaluator.get_best_per_trial(og)):
                 np.save(sample_path / f'cppn_{t}.npy', env_data[e])
+
+        progress.update()
 
     return best_envs
 
@@ -258,11 +259,12 @@ def save_heatmap(sweep, path, env_name):
     data = get_data(sweep, path, env_name)
 
     # Render, decorate, and save the heatmap.
-    sns.heatmap(pivot(sweep, data), **sweep.labels(), cmap='viridis')
-    draw_sample_points(sweep)
-    plt.suptitle(env_name)
+    plt.figure(figsize=(3, 3))
+    sns.heatmap(pivot(sweep, data), **sweep.labels(), cbar=False,
+                vmin=0, vmax=MAX_OUTER_FITNESS, cmap=POP_PALETTE)
+    #draw_sample_points(sweep)
     plt.tight_layout()
-    plt.savefig(path / f'{env_name}.png', dpi=600)
+    plt.savefig(path / f'{env_name}.png', dpi=300)
     plt.close()
 
 
@@ -277,24 +279,37 @@ def compare_envs(sweep, path):
         pt1 = pivot(sweep, data[env_name1])
         pt2 = pivot(sweep, data[env_name2])
         delta = pt2 - pt1
-        sns.heatmap(delta, **sweep.labels(), cmap='Spectral')
-        draw_sample_points(sweep)
-        plt.suptitle(f'{env_name2} - {env_name1}')
+        plt.figure(figsize=(3, 3))
+        sns.heatmap(delta, **sweep.labels(), vmin=-0.5, vmax=0.5,
+                    center=0, cmap='Spectral', cbar=False)
+        #draw_sample_points(sweep)
         plt.tight_layout()
-        plt.savefig(path / f'{env_name2}_vs_{env_name1}.png', dpi=600)
+        plt.savefig(path / f'{env_name2}_vs_{env_name1}.png', dpi=300)
         plt.close()
 
-    if all((env_name in data for env_name in ['flat', 'baym', 'cppn'])):
-        flat = pivot(sweep, data['flat'])
-        baym = pivot(sweep, data['baym'])
-        cppn = pivot(sweep, data['cppn'])
-        cppn_marginal = cppn - np.max([flat, baym], axis=0)
-        sns.heatmap(cppn_marginal, **sweep.labels(), center=0, cmap='Spectral')
-        draw_sample_points(sweep)
-        plt.suptitle('cppn - max(flat, baym)')
-        plt.tight_layout()
-        plt.savefig(path / 'cppn_vs_both.png', dpi=600)
-        plt.close()
+    flat = pivot(sweep, data['flat'])
+    baym = pivot(sweep, data['baym'])
+    cppn = pivot(sweep, data['cppn'])
+    cppn_marginal = (cppn - np.max([flat, baym], axis=0))/MAX_OUTER_FITNESS
+    plt.figure(figsize=(3, 3))
+    sns.heatmap(cppn_marginal, **sweep.labels(), vmin=-0.5, vmax=0.5,
+                center=0, cmap='Spectral', cbar=False)
+    #draw_sample_points(sweep)
+    plt.tight_layout()
+    plt.savefig(path / f'cppn_vs_both.png', dpi=300)
+    plt.close()
+
+    all_data = pl.concat(data.values())
+    sns.displot(data=all_data, x='Fitness', hue='Environment',
+                hue_order=HUE_ORDER, palette='colorblind', legend=False,
+                kind='hist', binwidth=32, fill=True, multiple='dodge',
+                height=3, aspect=2, shrink=1.5)
+    offset = 8.5
+    plt.xticks(np.linspace(0, 448, 8) - offset,
+               np.linspace(0, 448, 8, dtype=int))
+    plt.xticks(np.linspace(0, 448, 15) - offset, minor=True)
+    plt.tight_layout()
+    plt.savefig(path / f'sweep_dist.png', dpi=300)
 
 
 def main(env_name, sweep_kind):

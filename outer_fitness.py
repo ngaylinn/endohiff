@@ -8,7 +8,10 @@ import numpy as np
 import taichi as ti
 
 from constants import (
-    CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, NUM_TRIALS)
+    CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
+    NUM_TRIALS)
+
+MAX_OUTER_FITNESS = MAX_HIFF + 1
 
 
 @ti.data_oriented
