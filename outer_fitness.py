@@ -30,18 +30,6 @@ class FitnessEvaluator:
             self.index = outer_population.index
         self.num_environments = self.index.shape[0]
 
-    @ti.func
-    def inc_fitness(self, e, og, fitness):
-        # Look up the trial and trial-relative index of the given environment.
-        t, i = self.index[e]
-        self.fitness[og, t, i] += fitness
-
-    @ti.func
-    def get_fitness(self, e, og):
-        # Look up the trial and trial-relative index of the given environment.
-        t, i = self.index[e]
-        return self.fitness[og, t, i]
-
     @ti.kernel
     def get_max_score(self, inner_population: ti.template(), og: int):
         shape = (self.num_environments, INNER_GENERATIONS) + ENVIRONMENT_SHAPE
@@ -87,6 +75,7 @@ class FitnessEvaluator:
                     break
 
     def score_populations(self, inner_population, og):
+        # TODO: This is very inefficient. Maybe find a better way?
         self.get_max_score(inner_population, og)
         self.get_first_instance(inner_population, og)
 
@@ -95,8 +84,8 @@ class FitnessEvaluator:
         best_index = ti.Vector([-1] * NUM_TRIALS)
         best_fitness = ti.Vector([-1.0] * NUM_TRIALS)
         for e in range(self.num_environments):
-            t = self.index[e][0]
-            fitness = self.get_fitness(e, og)
+            t, i = self.index[e]
+            fitness = self.fitness[og, t, i]
             # Set the max fitness for this trial in a thread-safe way, then
             # check to see if this was the thread that won and store the
             # associated index if so.
@@ -110,7 +99,8 @@ class FitnessEvaluator:
         best_index = -1
         best_fitness = -1.0
         for e in range(self.num_environments):
-            fitness = self.get_fitness(e, og)
+            t, i = self.index[e]
+            fitness = self.fitness[og, t, i]
             # Set the max fitness in a thread-safe way, then check to see if
             # this was the thread that won and store the associated index if
             # so.

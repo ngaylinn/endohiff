@@ -95,7 +95,7 @@ class OuterPopulation:
 
 # A demo to visualize what a random initial population of CPPNs looks like.
 if __name__ == '__main__':
-    ti.init(ti.cuda, unrolling_limit=0)
+    ti.init(ti.cuda)
 
     outer_population = OuterPopulation()
     outer_population.randomize()

@@ -154,9 +154,7 @@ def run_experiment_evolved_env(migration, crossover, verbose):
 
 
 def main(env_name, migration, crossover, verbose):
-    # We store weights in a vector, which Taichi warns could cause slow compile
-    # times. In practice, this doesn't seem like a problem, so disable the warning.
-    ti.init(ti.cuda, unrolling_limit=0)
+    ti.init(ti.cuda)
 
     if env_name == 'cppn':
         run_experiment_evolved_env(migration, crossover, verbose)

@@ -51,17 +51,6 @@ def get_default_params_numpy(shape=(1,)):
     return params
 
 
-# TODO: Maybe remove? The experiment no longer uses this, but it's still here
-# mostly because it's fun to look at (also for skew analysis, but that could be
-# a one-off, rather than storing one_count in all the logs).
-@ti.func
-def count_ones(bitstr):
-    one_count = ti.cast(0, ti.int8)
-    for b in range(BITSTR_LEN):
-        one_count += ti.cast((bitstr >> b) & 1, ti.int8)
-    return one_count
-
-
 @ti.dataclass
 class Individual:
     bitstr: BITSTR_DTYPE
@@ -231,29 +220,25 @@ class InnerPopulation:
     @ti.kernel
     def get_logs_kernel(self, e: int,
                         bitstr: ti.types.ndarray(),
-                        fitness: ti.types.ndarray(),
-                        one_count: ti.types.ndarray()):
+                        fitness: ti.types.ndarray()):
         ne, ig, ew, eh, cc = self.pop.shape
         for g, x, y, i in ti.ndrange(ig, ew, eh, cc):
             individual = self.pop[e, g, x, y, i]
             bitstr[g, x, y, i] = individual.bitstr
             fitness[g, x, y, i] = individual.fitness
-            one_count[g, x, y, i] = count_ones(individual.bitstr)
 
     def get_logs(self, env_index):
         # Grab just the logs we need from the GPU...
         shape = self.pop.shape[1:]
         bitstr = np.zeros(shape, dtype=np.uint64)
         fitness = np.zeros(shape, dtype=np.float16)
-        one_count = np.zeros(shape, dtype=np.int8)
-        self.get_logs_kernel(env_index, bitstr, fitness, one_count)
+        self.get_logs_kernel(env_index, bitstr, fitness)
 
         # Make a data frame and annotate it with the premade index.
         return pl.DataFrame({
             'bitstr': bitstr.ravel(),
             'fitness': fitness.ravel(),
             'alive': ~np.isnan(fitness.ravel()),
-            'one_count': one_count.ravel(),
         }).hstack(
             self.index
         )

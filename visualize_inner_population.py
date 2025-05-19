@@ -4,97 +4,19 @@
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
-import warnings
 
 import einops
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
-import seaborn as sns
 from tqdm import trange
 
 from constants import (
-    BITSTR_LEN, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF, POP_TILE_SIZE)
+    ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF, POP_TILE_SIZE)
 
 ENV_PALETTE = 'mako'
 POP_PALETTE = 'rocket'
-ONE_FRAC_PALETTE = 'Spectral'
-
-
-# Making ridgeplots with Seaborn generates lots of these warnings.
-warnings.filterwarnings('ignore', category=UserWarning, message='Tight layout not applied')
-
-
-def chart_fitness_dist(path, inner_log):
-    """Generate a ridgeplot showing fitness distribution over generations.
-    """
-    num_ridges = 10
-    ridge_gap = INNER_GENERATIONS // num_ridges
-    sample_generations = set(
-        range(ridge_gap - 1, INNER_GENERATIONS, ridge_gap))
-    inner_log = inner_log.filter(
-        # Looking only at living individuals...
-        pl.col('alive') &
-        # Sample every ten generations...
-        (pl.col('Generation').is_in(sample_generations))
-    ).group_by(
-        # For all cells across all generations...
-        'Generation', 'x', 'y'
-    ).agg(
-        # Find the mean fitness score for all individuals in this cell.
-        pl.col('fitness').mean().alias('Mean Fitness')
-    ).drop('x', 'y')
-
-    # Since we only count living individuals, we might have no data for some
-    # generations if the population went extinct. Make sure we can still
-    # generate a chart by filling in data for missing generations.
-    missing_generations = (
-        sample_generations - set(inner_log['Generation'].unique()))
-    inner_log = pl.concat((inner_log, pl.DataFrame({
-        'Generation': sorted(missing_generations),
-        'Mean Fitness': np.float32(0.0)
-    })))
-
-    # Add a column indicating the overall average fitness score so we can color
-    # each ridge to match the performance at that time step.
-    inner_log = inner_log.join(
-        inner_log.group_by(
-            'Generation'
-        ).agg(
-            pl.col('Mean Fitness').mean().alias('color')
-        ),
-        on='Generation',
-        how='inner',
-        coalesce=True
-    )
-
-    # Set up the ridge plot visualization.
-    sns.set_theme(style='white', rc={"axes.facecolor": (0, 0, 0, 0)})
-    grid = sns.FacetGrid(
-        inner_log, row='Generation', hue='Generation',
-        aspect=15, height=0.5, xlim=(0, MAX_HIFF))
-
-    # Plot the mean fitness score for each sample generation and label it with the
-    # generation number.
-    def plot_ridge(x, color, label):
-        ax = plt.gca()
-        color = plt.cm.viridis(x.mean() / MAX_HIFF)
-        sns.kdeplot(x=x, color=color, alpha=1.0, fill=True, warn_singular=False)
-        ax.text(0, 0.2, f'Gen {label}', ha='left', va='center',
-                transform=ax.transAxes)
-    grid.map(plot_ridge, 'Mean Fitness')
-
-    # Apply styling and save results.
-    grid.refline(y=0, linestyle='-', clip_on=False)
-    grid.figure.subplots_adjust(hspace=-0.25)
-    grid.set_titles('')
-    grid.set(yticks=[], ylabel='')
-    grid.despine(bottom=True, left=True)
-    grid.figure.suptitle(f'Fitness score distribution')
-    grid.figure.savefig(path / 'inner_fitness.png', dpi=300)
-    plt.close()
-    plt.set_cmap('viridis')
 
 
 def render_map_decorations(title, tile_size=1):
@@ -133,7 +55,7 @@ def render_env_map(env_data):
     """Render a map of minimum fitness values in an environment.
     """
     frameless_figure()
-    plt.imshow(env_data.transpose(), plt.get_cmap(ENV_PALETTE))
+    plt.imshow(env_data.transpose(), ENV_PALETTE)
     plt.clim(0, MAX_HIFF)
     # render_map_decorations('Environment Min Fitness')
 
@@ -144,14 +66,6 @@ def save_env_map(path, env_data, name='env_map'):
     render_env_map(env_data)
     plt.savefig(path / f'{name}.png', dpi=20)
     plt.close()
-
-
-def get_masked_column_data(data, column):
-    """Select a column of experiment data, with dead individuals masked out.
-    """
-    return np.ma.masked_array(
-        data.select(column).to_numpy().squeeze(),
-        ~data.select('alive').to_numpy().squeeze())
 
 
 def spatialize_pop_data(pop_data):
@@ -170,9 +84,12 @@ def spatialize_pop_data(pop_data):
 
 def render_fitness_map(inner_log):
     frameless_figure()
-    pop_data = get_masked_column_data(inner_log, 'fitness')
-    plt.imshow(spatialize_pop_data(pop_data),
-               plt.get_cmap(POP_PALETTE).with_extremes(bad='black'))
+
+    pop_data = inner_log.filter(
+        pl.col('Generation') == INNER_GENERATIONS - 1
+    ).select('fitness').to_numpy().squeeze()
+
+    plt.imshow(spatialize_pop_data(pop_data), POP_PALETTE)
     plt.clim(0, MAX_HIFF)
     # render_map_decorations('HIFF score map', POP_TILE_SIZE)
 
@@ -185,36 +102,19 @@ def save_fitness_map(path, inner_log):
     plt.close()
 
 
-def render_one_frac_map(inner_log):
-    frameless_figure()
-    pop_data = get_masked_column_data(inner_log, 'one_count') / BITSTR_LEN
-    plt.imshow(spatialize_pop_data(pop_data),
-               cmap=plt.get_cmap(ONE_FRAC_PALETTE).with_extremes(bad='black'))
-    plt.clim(0.0, 1.0)
-    # render_map_decorations('Bit ratio map', POP_TILE_SIZE)
-
-
-def save_one_frac_map(path, inner_log):
-    """Render a static map of a population's ratio of 1s to 0s.
-    """
-    render_one_frac_map(inner_log)
-    plt.savefig(path / 'one_frac_map.png', dpi=300)
-    plt.close()
-
-
 def save_fitness_animation(path, inner_log, gif=True):
     """Save a video of the inner population over a single experiment.
     """
     # Grab the data we need and split it by generation.
-    fitness_by_generation = get_masked_column_data(
-        inner_log, 'fitness'
-    ).reshape(INNER_GENERATIONS, -1)
+    fitness_by_generation = inner_log.select(
+        'fitness'
+    ).to_numpy().reshape(INNER_GENERATIONS, -1)
 
     fig = frameless_figure()
 
     # Render the first frame, and make an animation for the rest.
-    image = plt.imshow(spatialize_pop_data(fitness_by_generation[0]),
-                       plt.get_cmap(POP_PALETTE).with_extremes(bad='black'))
+    image = plt.imshow(
+        spatialize_pop_data(fitness_by_generation[0]), POP_PALETTE)
     plt.clim(0, MAX_HIFF)
     def animate_func(generation):
         image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
@@ -228,61 +128,21 @@ def save_fitness_animation(path, inner_log, gif=True):
     plt.close()
 
 
-def save_one_frac_animation(path, inner_log, gif=True):
-    """Save a video of a population's ratio of 1s to 0s over one experiment.
-    """
-    # Grab the data we need and split it by generation.
-    one_frac_by_generation = get_masked_column_data(
-        inner_log, 'one_count'
-    ).reshape(INNER_GENERATIONS, -1) / BITSTR_LEN
-
-    fig = frameless_figure()
-
-    # Render the first frame, and make an animation for the rest.
-    image = plt.imshow(spatialize_pop_data(one_frac_by_generation[0]),
-                       plt.get_cmap(ONE_FRAC_PALETTE).with_extremes(bad='black'))
-    plt.clim(0.0, 1.0)
-    def animate_func(generation):
-        image.set_array(spatialize_pop_data(one_frac_by_generation[generation]))
-        return image
-    anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
-
-    if gif:
-        anim.save(path / 'one_frac_map.gif', writer='pillow', dpi=20)
-    else:
-        anim.save(path / 'one_frac_map.mp4', writer='ffmpeg')
-    plt.close()
-
-
 def visualize_experiment(path, inner_log, env_data, verbose=1):
     """Generate all single trial visualizations, and save to path.
     """
     # Maybe show a progress bar as we generate files.
     if verbose > 0:
-        num_artifacts = 6
+        num_artifacts = 3
         tick_progress = trange(num_artifacts).update
     else:
         tick_progress = lambda: None
 
-    #save_one_frac_animation(path, inner_log)
-    #tick_progress()
+    save_fitness_animation(path, inner_log)
+    tick_progress()
 
-    #save_fitness_animation(path, inner_log)
-    #tick_progress()
-
-    #chart_fitness_dist(path, inner_log)
-    #tick_progress()
-
-    # Restrict to the last generation and render still maps of the final state.
-    inner_log = inner_log.filter(
-        pl.col('Generation') == INNER_GENERATIONS - 1
-    )
-
-    #save_one_frac_map(path, inner_log)
-    #tick_progress()
-
-    #save_fitness_map(path, inner_log)
-    #tick_progress()
+    save_fitness_map(path, inner_log)
+    tick_progress()
 
     save_env_map(path, env_data)
     tick_progress()

@@ -313,7 +313,7 @@ def compare_envs(sweep, path):
 
 
 def main(env_name, sweep_kind):
-    ti.init(ti.cuda, unrolling_limit=0)
+    ti.init(ti.cuda)
 
     path = OUTPUT_PATH / f'{sweep_kind}_sweep'
     path.mkdir(exist_ok=True, parents=True)

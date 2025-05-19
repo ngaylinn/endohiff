@@ -59,7 +59,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from visualize_inner_population import render_env_map
 
-    ti.init(ti.cuda, unrolling_limit=0)
+    ti.init(ti.cuda)
 
     render_env_map(STATIC_ENVIRONMENTS['baym']()[0])
     plt.show()
