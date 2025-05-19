@@ -59,7 +59,7 @@ class OuterPopulation:
         for e, x, y, in ti.ndrange(ne, ew, eh):
             inputs = ti.Vector([x / ew, y / eh])
             outputs = self.cppns.activate(e, inputs)
-            self.env[e, x, y] = outputs[0] * MAX_HIFF
+            self.env[e, x, y] = ti.cast(outputs[0] * MAX_HIFF, ti.float16)
 
     def make_environments(self):
         self.render_environments()
