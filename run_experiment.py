@@ -110,10 +110,10 @@ def run_experiment_evolved_env(migration, crossover, verbose):
 
     # Set up parameters for the InnerPopulation.
     params = get_default_params(NUM_TRIALS)
-    if not migration:
-        params.migration_rate.fill(0.0)
-    if not crossover:
-        params.crossover_rate.fill(0.0)
+    #if not migration:
+    #    params.migration_rate.fill(0.0)
+    #if not crossover:
+    #    params.crossover_rate.fill(0.0)
 
     # Evolve a population of CPPN environments NUM_TRIALS times, and a whole
     # population of bitstrings within each one.
