@@ -248,7 +248,7 @@ class InnerPopulation:
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from environments import make_baym, make_field
-    from visualize_inner_population import render_one_frac_map
+    from visualize_inner_population import render_fitness_map
 
     ti.init(ti.cuda)
 
@@ -261,5 +261,5 @@ if __name__ == '__main__':
     inner_log = inner_population.get_logs(0).filter(
         pl.col('Generation') == INNER_GENERATIONS - 1
     )
-    render_one_frac_map(inner_log)
+    render_fitness_map(inner_log)
     plt.show()

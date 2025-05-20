@@ -1,7 +1,6 @@
-from constants import NUM_TRIALS
-from sweep import SWEEP_KINDS, all_sweep_sample_dirs
+from src.constants import ENV_NAMES, NUM_TRIALS
+from src.sweep import SWEEP_KINDS, all_sweep_sample_dirs
 
-ENV_NAMES = ['baym', 'cppn', 'flat']
 TRIALS = list(range(NUM_TRIALS))
 SAMPLE_DIRS = all_sweep_sample_dirs()
 
@@ -9,73 +8,127 @@ rule all:
   input:
     expand('output/{sweep_sample_dir}/{env_name}/trial_{trial}/env_map.png',
            sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
-    expand('output/{sweep_sample_dir}/{env_name}/trial_{trial}/inner_fitness.png',
-           sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
     expand('output/{sweep_sample_dir}/{env_name}/trial_{trial}/fitness_map.gif',
            sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
     expand('output/{sweep_sample_dir}/{env_name}/trial_{trial}/fitness_map.png',
            sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
-    expand('output/{sweep_sample_dir}/{env_name}/trial_{trial}/one_frac_map.gif',
-           sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
-    expand('output/{sweep_sample_dir}/{env_name}/trial_{trial}/one_frac_map.png',
-           sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
+    expand('output/{sweep_sample_dir}/{env_name}/best_trial.txt',
+           sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES),
+    expand('output/{sweep_sample_dir}/{env_name}/bitstring_fitness.png',
+           sweep_sample_dir=SAMPLE_DIRS, env_name=ENV_NAMES),
     expand('output/{sweep_sample_dir}/cppn/cppn_{trial}.png',
            sweep_sample_dir=SAMPLE_DIRS, trial=TRIALS),
-    expand('output/{sweep_sample_dir}/cppn/outer_fitness.png',
+    expand('output/{sweep_sample_dir}/cppn/environment_fitness.png',
            sweep_sample_dir=SAMPLE_DIRS),
-    expand('output/{sweep_sample_dir}/fitness.png',
+    expand('output/{sweep_sample_dir}/fitness_comparison.png',
            sweep_sample_dir=SAMPLE_DIRS),
-    expand('output/{sweep_sample_dir}/final_fitness.png',
-           sweep_sample_dir=SAMPLE_DIRS),
-    expand('output/{sweep_sample_dir}/mannwhitneyu.txt',
-           sweep_sample_dir=SAMPLE_DIRS),
-#    expand('output/{sweep_kind}_sweep/{env_name}.png',
-#           sweep_kind=SWEEP_KINDS, env_name=ENV_NAMES),
-#    expand('output/{sweep_kind}_sweep/baym_vs_flat.png', sweep_kind=SWEEP_KINDS),
-#    expand('output/{sweep_kind}_sweep/cppn_vs_baym.png', sweep_kind=SWEEP_KINDS),
-#    expand('output/{sweep_kind}_sweep/cppn_vs_flat.png', sweep_kind=SWEEP_KINDS),
-#    expand('output/{sweep_kind}_sweep/cppn_vs_both.png', sweep_kind=SWEEP_KINDS),
+    expand('output/{sweep_kind}_sweep/{env_name}.png',
+           sweep_kind=SWEEP_KINDS, env_name=ENV_NAMES),
+    expand('output/{sweep_kind}_sweep/baym_vs_flat.png', sweep_kind=SWEEP_KINDS),
+    expand('output/{sweep_kind}_sweep/cppn_vs_both.png', sweep_kind=SWEEP_KINDS),
 
     # TODO: Restore secondary figures!
 
 
-rule visualize_bitstr_evolution:
+rule render_environment_map:
   input:
     '{path}/env.npy',
-    '{path}/inner_log.parquet',
   output:
     '{path}/env_map.png',
-    '{path}/inner_fitness.png',
-    '{path}/fitness_map.gif',
-    '{path}/fitness_map.png',
-    '{path}/one_frac_map.gif',
-    '{path}/one_frac_map.png',
-  params: '{path} -v 0'
-  shell: 'python3 ./visualize_inner_population.py {params}'
+  shell: 'python3 -m src.environments.visualize_one {input} -o {output}'
 
 
-rule visualize_environment_evolution:
+rule render_extra_cppn_map:
   input:
-    expand('{{path}}/cppn_{trial}.npy', trial=TRIALS),
+    '{path}/cppn_{trial,\d}.npy',
+  output:
+    '{path}/cppn_{trial,\d}.png',
+  shell: 'python3 -m src.environments.visualize_one {input}'
+
+
+rule chart_environment_fitness:
+  input:
     '{path}/outer_log.parquet',
   output:
-    expand('{{path}}/cppn_{trial}.png', trial=TRIALS),
-    '{path}/outer_fitness.png',
-  params: '{path} -v 0'
-  shell: 'python3 ./visualize_outer_population.py {params}'
+    '{path}/environment_fitness.png',
+  shell: 'python3 -m src.environments.visualize_fitness {input}'
 
 
-rule compare_environments:
+rule render_bitstring_fitness_map:
+  input:
+    '{path}/inner_log.parquet',
+  output:
+    '{path}/fitness_map.png',
+  shell: 'python3 -m src.bitstrings.visualize_population {input}'
+
+
+rule render_bitstring_fitness_video:
+  input:
+    '{path}/inner_log.parquet',
+  output:
+    '{path}/fitness_map.gif',
+  shell: 'python3 -m src.bitstrings.visualize_population {input} -f'
+
+
+rule summarize_sample_dir:
   input:
     expand('{{path}}/{env_name}/trial_{trial}/inner_log.parquet',
            env_name=ENV_NAMES, trial=TRIALS),
   output:
-    '{path}/fitness.png',
-    '{path}/final_fitness.png',
-    '{path}/mannwhitneyu.txt',
-    expand('{{path}}/{env_name}/env_fitness.png', env_name=ENV_NAMES),
-  params: '{path}'
-  shell: 'python3 ./compare_experiments.py {params}'
+    expand('{{path}}/{env_name}/best_trial.txt', env_name=ENV_NAMES),
+    expand('{{path}}/{env_name}/bitstring_fitness.png', env_name=ENV_NAMES),
+    '{path}/fitness_comparison.png',
+  shell: 'python3 -m src.bitstrings.visualize_fitness {wildcards.path}'
+
+
+rule render_sweep_summaries:
+  input:
+    expand('output/{{sweep_kind}}_sweep/{env_name}.parquet', env_name=ENV_NAMES),
+  output:
+    expand('output/{{sweep_kind}}_sweep/{env_name}.png', env_name=ENV_NAMES),
+    expand('output/{{sweep_kind}}_sweep/baym_vs_flat.png'), 
+    expand('output/{{sweep_kind}}_sweep/cppn_vs_both.png'), 
+  shell: 'python3 -m src.sweep output/{wildcards.sweep_kind}_sweep {wildcards.sweep_kind}'
+    
+
+
+#rule visualize_bitstr_evolution:
+#  input:
+#    '{path}/env.npy',
+#    '{path}/inner_log.parquet',
+#  output:
+#    '{path}/env_map.png',
+#    '{path}/inner_fitness.png',
+#    '{path}/fitness_map.gif',
+#    '{path}/fitness_map.png',
+#    '{path}/one_frac_map.gif',
+#    '{path}/one_frac_map.png',
+#  params: '{path} -v 0'
+#  shell: 'python3 ./visualize_inner_population.py {params}'
+#
+#
+#rule visualize_environment_evolution:
+#  input:
+#    expand('{{path}}/cppn_{trial}.npy', trial=TRIALS),
+#    '{path}/outer_log.parquet',
+#  output:
+#    expand('{{path}}/cppn_{trial}.png', trial=TRIALS),
+#    '{path}/outer_fitness.png',
+#  params: '{path} -v 0'
+#  shell: 'python3 ./visualize_outer_population.py {params}'
+#
+#
+#rule compare_environments:
+#  input:
+#    expand('{{path}}/{env_name}/trial_{trial}/inner_log.parquet',
+#           env_name=ENV_NAMES, trial=TRIALS),
+#  output:
+#    '{path}/fitness.png',
+#    '{path}/final_fitness.png',
+#    '{path}/mannwhitneyu.txt',
+#    expand('{{path}}/{env_name}/env_fitness.png', env_name=ENV_NAMES),
+#  params: '{path}'
+#  shell: 'python3 ./compare_experiments.py {params}'
 
 
 # TODO: Rules to run the sweep.
