@@ -91,6 +91,9 @@ def main(path):
     for e, env_data in enumerate(evironments):
         save_env_map(env_data, path / f'cppn_{e}.png')
 
+    # Indicate the program completed successfully.
+    return 0
+
 
 if __name__ == '__main__':
     parser = ArgumentParser(
