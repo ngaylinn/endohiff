@@ -21,7 +21,7 @@ MAX_OUTER_FITNESS = 449
 #     CARRYING_CAPACITY, ENV_NAMES, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
 #     OUTPUT_PATH)
 # from environments import (
-#     ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_environment, make_flat)
+#     ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_env_field, make_flat)
 # from inner_population import InnerPopulation, get_default_params_numpy, Params
 # from outer_population import OuterPopulation
 # from outer_fitness import MAX_OUTER_FITNESS, FitnessEvaluator, get_per_trial_scores
@@ -129,7 +129,7 @@ class Sweep:
 #def bitstr_sweep(sweep, env_data, path, env_name):
 #    # Set up an environment for running these simulations.
 #    batch_size = SWEEP_SIZE * NUM_TRIALS
-#    env = make_environment(batch_size)
+#    env = make_env_field(batch_size)
 #    params = Params.field(shape=batch_size)
 #    inner_population = InnerPopulation(batch_size)
 #

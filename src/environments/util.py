@@ -19,7 +19,7 @@ def expand_shape(raw_shape=None):
     return shape
 
 
-def make_environment(shape=None):
+def make_env_field(shape=None):
     shape = expand_shape(shape)
     return ti.field(ti.float16, shape=shape)
 

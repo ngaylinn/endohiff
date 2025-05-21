@@ -5,7 +5,7 @@ import polars as pl
 import taichi as ti
 
 from constants import OUTPUT_PATH
-from .environments.util import make_environments, make_baym
+from .environments.util import make_envw_field, make_baym
 from inner_population import InnerPopulation, get_default_params
 from visualize_inner_population import visualize_experiment
 
@@ -47,7 +47,7 @@ def baym_variants():
         'high': make_high,
     }
 
-    env = make_field()
+    env = make_env_field()
     for env_name, make_env in environments.items():
         env.from_numpy(make_env())
         params = get_default_params()
