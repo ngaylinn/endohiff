@@ -1,9 +1,6 @@
-"""Functions for breeding individuals from the inner population.
-"""
-
 import taichi as ti
 
-from constants import (
+from ..constants import (
     BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, MUTATION_MAGNITUDE)
 
 
@@ -89,7 +86,7 @@ def validate_selection():
     """
     import numpy as np
 
-    from inner_population import Individual, get_default_params
+    from .population import BitstrIndividual, make_params_field
 
     # Do selection NUM_TESTS times with all possible values of tournament size
     # (that is, from 1 to CARRYING_CAPACITY, inclusive).
@@ -102,7 +99,7 @@ def validate_selection():
 
     # Set up NUM_TESTS populations of CARRYING_CAPACITY individuals, with
     # fitness values 1..CARRYING_CAPACITY.
-    pop = Individual.field(shape=(ne, ig, ew, eh, cc))
+    pop = BitstrIndividual.field(shape=(ne, ig, ew, eh, cc))
     pop.fitness.from_numpy(
         np.tile(
             np.arange(CARRYING_CAPACITY), ew * ne
@@ -110,7 +107,7 @@ def validate_selection():
 
     # Each of the NUM_TESTS populations gets assigned one of the possible
     # values for tournament size, ranging from 1 to CARRYING_CAPACITY.
-    params = get_default_params(CARRYING_CAPACITY)
+    params = make_params_field(CARRYING_CAPACITY)
     params.tournament_size.from_numpy(
         np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1)
 
@@ -119,7 +116,7 @@ def validate_selection():
     arena.select_all(0, params)
 
     # Print a summary of results. When tournament_size == 1, you should get ~13
-    # which indicates we picked the median individual (rounded up) on average.
+    # which indicates we picked the median individual on average.
     # When tournament_size == CARRYING_CAPACITY, you should get exactly
     # CARRYING_CAPACITY, indicating we found the best individual every time.
     mean_selection = (
@@ -133,3 +130,4 @@ def validate_selection():
 if __name__ == '__main__':
     ti.init(ti.cuda, debug=True)
     validate_selection()
+

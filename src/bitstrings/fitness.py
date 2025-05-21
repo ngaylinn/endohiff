@@ -1,9 +1,6 @@
-"""Compute metrics on the inner population, like hiff score and one count.
-"""
-
 import taichi as ti
 
-from constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE
+from ..constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE
 
 
 @ti.func
@@ -55,3 +52,4 @@ if __name__ == '__main__':
     ti.init(ti.cpu, cpu_max_num_threads=1)
     bitstr = 0b0000000000000000000000000000000000000000000000000000000000000000
     hiff_demo(bitstr)
+

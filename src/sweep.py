@@ -22,7 +22,7 @@ MAX_OUTER_FITNESS = 449
 #     OUTPUT_PATH)
 # from environments import (
 #     ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_env_field, make_flat)
-# from inner_population import InnerPopulation, get_default_params_numpy, Params
+# from .bitstrings.population import BitstrPopulation, make_params_field, Params
 # from outer_population import OuterPopulation
 # from outer_fitness import MAX_OUTER_FITNESS, FitnessEvaluator, get_per_trial_scores
 
@@ -130,8 +130,8 @@ class Sweep:
 #    # Set up an environment for running these simulations.
 #    batch_size = SWEEP_SIZE * NUM_TRIALS
 #    env = make_env_field(batch_size)
-#    params = Params.field(shape=batch_size)
-#    inner_population = InnerPopulation(batch_size)
+#    params = make_params_field(batch_size)
+#    bitstr_pop = BitstrPopulation(batch_size)
 #
 #    # Sweep through hyperparameter settings one batch at a time.
 #    print('Evolving bitstrings for all parameters...')
@@ -142,14 +142,14 @@ class Sweep:
 #        # times in parallel.
 #        env.from_numpy(env_data[i1].repeat(NUM_TRIALS, axis=0))
 #        params.from_numpy(params_data.repeat(NUM_TRIALS))
-#        inner_population.evolve(env, params)
+#        bitstr_pop.evolve(env, params)
 #
 #        # Copy fitness scores to the GPU and add them to the logs along with
 #        # the hyperparamter settings that correspond to those results.
 #        frames.append(pl.DataFrame({
 #            sweep.param1.name: params_data[sweep.param1.key].repeat(NUM_TRIALS),
 #            sweep.param2.name: params_data[sweep.param2.key].repeat(NUM_TRIALS),
-#            'Fitness': get_per_trial_scores(inner_population),
+#            'Fitness': get_per_trial_scores(bitstr_pop),
 #            'Environment': [env_name] * batch_size,
 #        }))
 #
@@ -167,7 +167,7 @@ class Sweep:
 #                    path / sweep.summary(i1, i2) / env_name / f'trial_{t}')
 #                sample_path.mkdir(exist_ok=True, parents=True)
 #                np.save(sample_path / 'env.npy', env_data[i1, i2])
-#                inner_log = inner_population.get_logs(e)
+#                inner_log = bitstr_pop.get_logs(e)
 #                inner_log.write_parquet(sample_path / f'inner_log.parquet')
 #
 #        progress.update()
@@ -182,8 +182,8 @@ class Sweep:
 #    sims_per_batch = NUM_TRIALS * OUTER_POPULATION_SIZE
 #
 #    outer_population = OuterPopulation(NUM_TRIALS)
-#    inner_population = InnerPopulation(sims_per_batch)
-#    params = Params.field(shape=sims_per_batch)
+#    bitstr_pop = BitstrPopulation(sims_per_batch)
+#    params = make_params_field(shape=sims_per_batch)
 #    evaluator = FitnessEvaluator(outer_population=outer_population)
 #    best_envs = make_flat(SWEEP_SHAPE)
 #
@@ -194,8 +194,8 @@ class Sweep:
 #        for og in range(OUTER_GENERATIONS):
 #            env = outer_population.make_environments()
 #            params.from_numpy(params_data.repeat(sims_per_batch))
-#            inner_population.evolve(env, params)
-#            evaluator.score_populations(inner_population, og)
+#            bitstr_pop.evolve(env, params)
+#            evaluator.score_populations(bitstr_pop, og)
 #            if og + 1 < OUTER_GENERATIONS:
 #                outer_population.propagate(og)
 #            progress.update()

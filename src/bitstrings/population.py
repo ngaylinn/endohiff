@@ -1,20 +1,12 @@
-"""Data types for representing an evolvable population of symbionts.
-
-The InnerPopulation class does most of the work of simulating a population,
-including propagating across generations and migrating across space. It's
-mostly just a wrapper around a field of Individuals, used to track and record
-the full state of the simulation.
-"""
-
 import numpy as np
 import polars as pl
 import taichi as ti
 
-from constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, CROSSOVER_RATE,
-    ENVIRONMENT_SHAPE, INNER_GENERATIONS)
-from inner_fitness import score_hiff
-from reproduction import mutation, crossover, TournamentArena
+from ..constants import (
+    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE,
+    INNER_GENERATIONS)
+from .fitness import score_hiff
+from .reproduction import mutation, crossover, TournamentArena
 
 
 @ti.dataclass
@@ -34,15 +26,6 @@ PARAMS_DTYPE = np.dtype([
 
 
 def get_default_params(shape=(1,)):
-    field = Params.field(shape=shape)
-    field.migration_rate.fill(1.0)
-    field.mortality_rate.fill(0.125)
-    field.fertility_rate.fill(25)
-    field.tournament_size.fill(6)
-    return field
-
-
-def get_default_params_numpy(shape=(1,)):
     params = np.empty(shape, dtype=PARAMS_DTYPE)
     params['migration_rate'] = 1.0
     params['mortality_rate'] = 0.125
@@ -51,8 +34,14 @@ def get_default_params_numpy(shape=(1,)):
     return params
 
 
+def make_params_field(shape=(1,)):
+    field = Params.field(shape=shape)
+    field.from_numpy(get_default_params(shape))
+    return field
+
+
 @ti.dataclass
-class Individual:
+class BitstrIndividual:
     bitstr: BITSTR_DTYPE
     fitness: ti.float16
 
@@ -70,7 +59,7 @@ class Individual:
 
 
 @ti.data_oriented
-class InnerPopulation:
+class BitstrPopulation:
     def __init__(self, num_environments=1):
         self.num_environments = num_environments
         ne = num_environments
@@ -81,7 +70,7 @@ class InnerPopulation:
         # The shape of the population in each generation
         self.shape = (ne, ew, eh, cc)
         # A full population of individuals for all generations.
-        self.pop = Individual.field(shape=(ne, ig, ew, eh, cc))
+        self.pop = BitstrIndividual.field(shape=(ne, ig, ew, eh, cc))
 
         # Per generation metadata that does not get saved.
         # Selections lets us pick fit, living individuals from pop and remember
@@ -91,8 +80,8 @@ class InnerPopulation:
         # population, used to enforce a maximum count.
         self.num_children = ti.field(int, shape=(ne, ew, eh, cc))
 
-        # An index with positional metadata for each Individual in self.pop,
-        # used to generate annotated log files.
+        # An index with positional metadata for each BitstrIndividual in
+        # self.pop, used to generate annotated log files.
         self.index = pl.DataFrame({
             'Generation':  np.arange(ig).repeat(ew * eh * cc),
             'x': np.tile(np.arange(ew).repeat(eh * cc), ig),
@@ -103,7 +92,7 @@ class InnerPopulation:
     def randomize(self):
         # Randomize the population.
         for e, x, y, i in ti.ndrange(*self.shape):
-            self.pop[e, 0, x, y, i] = Individual(ti.random(BITSTR_DTYPE))
+            self.pop[e, 0, x, y, i] = BitstrIndividual(ti.random(BITSTR_DTYPE))
 
     @ti.kernel
     def evaluate(self, g: ti.i32):
@@ -133,7 +122,7 @@ class InnerPopulation:
         # Add one to the children so far, using atomic add to ensure thread
         # safety. The return value is unique to each thread.
         num_children = ti.atomic_add(self.num_children[e, x, y, i], 1)
-        child = Individual()
+        child = BitstrIndividual()
         # If this parent hasn't had too many already, generate a new child.
         if num_children + 1 < params[e].fertility_rate:
             # Do crossover if a mate index was specified.
@@ -216,7 +205,7 @@ class InnerPopulation:
     # big that the to_numpy() method causes an OOM error! So, unfortunately we
     # need this awkward kernel to copy just the data we need from the field
     # into a set of numpy arrays (there's no way to use a single ndarray for a
-    # dataclass like Individual with Taichi, either).
+    # dataclass like BitstrIndividual with Taichi, either).
     @ti.kernel
     def get_logs_kernel(self, e: int,
                         bitstr: ti.types.ndarray(),
@@ -247,19 +236,20 @@ class InnerPopulation:
 # A demo to show that evolution is working.
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from .environments.util import make_baym, make_environment
-    from .bitstrings.visualize_population import render_fitness_map
+    from ..environments.util import make_baym, make_env_field
+    from .visualize_population import render_fitness_map
 
     ti.init(ti.cuda)
 
-    env = make_environment()
+    env = make_env_field()
     env.from_numpy(make_baym())
-    params = get_default_params()
-    inner_population = InnerPopulation()
+    params = make_params_field()
+    bitstr_population = BitstrPopulation()
 
-    inner_population.evolve(env, params)
-    inner_log = inner_population.get_logs(0).filter(
+    bitstr_population.evolve(env, params)
+    inner_log = bitstr_population.get_logs(0).filter(
         pl.col('Generation') == INNER_GENERATIONS - 1
     )
     render_fitness_map(inner_log)
     plt.show()
+

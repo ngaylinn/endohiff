@@ -78,9 +78,9 @@ environments
  + visualize_fitness.py *
 bitstrings
  - evolve.py *
- - fitness.py
- - population.py
- - reproduction.py
+ + fitness.py
+ + population.py
+ + reproduction.py
  - sweep.py *
  + visualize_population.py *
  + visualize_fitness.py *

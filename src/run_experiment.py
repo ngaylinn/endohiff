@@ -16,12 +16,12 @@ import numpy as np
 import taichi as ti
 from tqdm import trange
 
-from constants import (
+from .constants import (
     ENV_NAMES, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
+from .bitstrings.population import BitstrPopulation, make_params_field
 from .environments.util import STATIC_ENVIRONMENTS, make_env_field
-from inner_population import InnerPopulation, get_default_params
-from outer_population import OuterPopulation
-from outer_fitness import FitnessEvaluator, get_best_trial
+from .environments.population import EnvironmentPopulation
+from .environments.fitness import EnvFitnessEvaluator, get_best_trial
 
 
 def get_variant_name(migration, crossover):
@@ -63,10 +63,10 @@ def run_experiment_static_env(env_name, migration, crossover):
     variant_name = get_variant_name(migration, crossover)
     path = OUTPUT_PATH / variant_name / env_name
 
-    # Set up environments and parameters for the InnerPopulation.
+    # Set up environments and parameters for the BitstrPopulation.
     environments = make_env_field(NUM_TRIALS)
     environments.from_numpy(STATIC_ENVIRONMENTS[env_name](NUM_TRIALS))
-    params = get_default_params(NUM_TRIALS)
+    params = make_params_field(NUM_TRIALS)
     if not migration:
         params.migration_rate.fill(0.0)
     if not crossover:
@@ -74,8 +74,8 @@ def run_experiment_static_env(env_name, migration, crossover):
 
     # Evolve a population of bitstrings in a static environment NUM_TRIALS
     # times, in parallel.
-    inner_population = InnerPopulation(NUM_TRIALS)
-    inner_population.evolve(environments, params)
+    bitstr_pop = BitstrPopulation(NUM_TRIALS)
+    bitstr_pop.evolve(environments, params)
 
     # Save a full summary for each trial.
     env_data = environments.to_numpy()
@@ -86,7 +86,7 @@ def run_experiment_static_env(env_name, migration, crossover):
         # doesn't change, just for consistency with the evolved environment
         # outputs.
         np.save(trial_path / 'env.npy', env_data[t])
-        inner_log = inner_population.get_logs(t)
+        inner_log = bitstr_pop.get_logs(t)
         inner_log.write_parquet(trial_path / 'inner_log.parquet')
 
     # Create an empty outer log, just for consistency with the evolved
@@ -94,7 +94,7 @@ def run_experiment_static_env(env_name, migration, crossover):
     (path / 'outer_log.parquet').touch()
 
     # Create a symlink to indicate which trial was the best one.
-    link_best_trial(path, get_best_trial(inner_population))
+    link_best_trial(path, get_best_trial(bitstr_pop))
 
 
 def run_experiment_evolved_env(migration, crossover, verbose):
@@ -108,8 +108,8 @@ def run_experiment_evolved_env(migration, crossover, verbose):
     else:
         progress = range(OUTER_GENERATIONS)
 
-    # Set up parameters for the InnerPopulation.
-    params = get_default_params(NUM_TRIALS)
+    # Set up parameters for the BitstrPopulation.
+    params = make_params_field(NUM_TRIALS)
     #if not migration:
     #    params.migration_rate.fill(0.0)
     #if not crossover:
@@ -117,21 +117,21 @@ def run_experiment_evolved_env(migration, crossover, verbose):
 
     # Evolve a population of CPPN environments NUM_TRIALS times, and a whole
     # population of bitstrings within each one.
-    outer_population = OuterPopulation(NUM_TRIALS)
-    inner_population = InnerPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
-    evaluator = FitnessEvaluator(outer_population=outer_population)
+    env_pop = EnvironmentPopulation(NUM_TRIALS)
+    bitstr_pop = BitstrPopulation(NUM_TRIALS * OUTER_POPULATION_SIZE)
+    evaluator = EnvFitnessEvaluator(env_pop=env_pop)
 
     # Evolve an outer population of environments. For performance reason,
     # this entire loop runs on the GPU with minimal data transfers.
-    outer_population.randomize()
+    env_pop.randomize()
     for og in progress:
-        environments = outer_population.make_environments()
-        inner_population.evolve(environments, params)
-        evaluator.score_populations(inner_population, og)
+        environments = env_pop.make_environments()
+        bitstr_pop.evolve(environments, params)
+        evaluator.score_pops(bitstr_pop, og)
         if og + 1 < OUTER_GENERATIONS:
-            outer_population.propagate(og)
+            env_pop.propagate(og)
 
-    # Log the best inner_population from each trial from the last outer
+    # Log the best bitstr_pop from each trial from the last outer
     # generation (ie, a fully evolved CPPN environment)
     env_data = environments.to_numpy()
     best_env_per_trial = evaluator.get_best_per_trial(og)
@@ -142,11 +142,11 @@ def run_experiment_evolved_env(migration, crossover, verbose):
         # Save the best environment and logs associated with this trial.
         e = best_env_per_trial[t]
         np.save(trial_path / 'env.npy', env_data[e])
-        inner_log = inner_population.get_logs(e)
+        inner_log = bitstr_pop.get_logs(e)
         inner_log.write_parquet(trial_path / 'inner_log.parquet')
 
     # Save the full logs for evolving the outer population.
-    outer_log = outer_population.get_logs()
+    outer_log = env_pop.get_logs()
     outer_log.write_parquet(path / 'outer_log.parquet')
 
     # Create a symlink to indicate which trial was the best one.

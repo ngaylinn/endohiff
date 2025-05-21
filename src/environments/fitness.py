@@ -9,7 +9,7 @@ MAX_OUTER_FITNESS = MAX_HIFF + 1
 
 
 @ti.data_oriented
-class EnvironmentFitnessEvaluator:
+class EnvFitnessEvaluator:
     def __init__(self, count=1, env_pop=None):
         # If there is no outer population, then assume we've got count
         # bitstr_pops to work with and set up some fields that can play

@@ -10,8 +10,8 @@ import taichi as ti
 from tqdm import trange
 
 from .constants import INNER_GENERATIONS, OUTPUT_PATH
-from .environments.util import STATIC_ENVIRONMENTS, make_environment
-from inner_population import InnerPopulation, get_default_params
+from .environments.util import STATIC_ENVIRONMENTS, make_env_field
+from .bitstrings.population import BitstrPopulation, make_params_field
 
 
 # Set these as high as you like to improve statistical significance.
@@ -23,18 +23,18 @@ NUM_PARALLEL = 25
 
 # Set up to run NUM_PARALLEL simulations on the GPU.
 ti.init(ti.cuda)
-env = make_environments(NUM_PARALLEL)
+env = make_env_field(NUM_PARALLEL)
 env.from_numpy(STATIC_ENVIRONMENTS['baym'](NUM_PARALLEL))
-params = get_default_params(NUM_PARALLEL)
-inner_population = InnerPopulation(NUM_PARALLEL)
+params = make_params_field(NUM_PARALLEL)
+bitstr_population = BitstrPopulation(NUM_PARALLEL)
 
 # Keep running simulations until we've run TOTAL_TRIALS, and count up the
 # number of ones found in each evolved bitstring.
 partial_counts = []
 for t in trange(TOTAL_TRIALS // NUM_PARALLEL):
-    inner_population.evolve(env, params)
+    bitstr_population.evolve(env, params)
     partial_counts.append(
-        inner_population.get_logs(0).filter(
+        bitstr_population.get_logs(0).filter(
             (pl.col('Generation') == INNER_GENERATIONS - 1) &
             (pl.col('alive') == True)
         # TODO: Count ones for yourself, since inner_population no longer does.

@@ -5,9 +5,9 @@ import polars as pl
 import taichi as ti
 
 from constants import OUTPUT_PATH
-from .environments.util import make_envw_field, make_baym
-from inner_population import InnerPopulation, get_default_params
-from visualize_inner_population import visualize_experiment
+from .bitstrings.population import BitstrPopulation, make_params_field
+from .environments.util import make_env_field, make_baym
+from visualize_bitstr_pop import visualize_experiment
 
 
 def make_gap(shape=None):
@@ -50,10 +50,10 @@ def baym_variants():
     env = make_env_field()
     for env_name, make_env in environments.items():
         env.from_numpy(make_env())
-        params = get_default_params()
-        inner_population = InnerPopulation()
-        inner_population.evolve(env, params)
-        inner_log = inner_population.get_logs(0)
+        params = make_params_field()
+        bitstr_pop = BitstrPopulation()
+        bitstr_pop.evolve(env, params)
+        inner_log = bitstr_pop.get_logs(0)
 
         print()
         print(f'Visualizing results for {env_name}...')
