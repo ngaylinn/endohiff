@@ -17,8 +17,8 @@ import taichi as ti
 from tqdm import trange
 
 from constants import (
-    NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
-from environments import ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_field
+    ENV_NAMES, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
+from .environments.util import STATIC_ENVIRONMENTS, make_environment
 from inner_population import InnerPopulation, get_default_params
 from outer_population import OuterPopulation
 from outer_fitness import FitnessEvaluator, get_best_trial
@@ -34,7 +34,7 @@ def get_all_trials():
     for migration in [True, False]:
         for crossover in [True, False]:
             variant_name = get_variant_name(migration, crossover)
-            for env_name in ALL_ENVIRONMENT_NAMES:
+            for env_name in ENV_NAMES:
                 for trial in range(NUM_TRIALS):
                     log_file = (
                         OUTPUT_PATH / variant_name / env_name /
@@ -64,7 +64,7 @@ def run_experiment_static_env(env_name, migration, crossover):
     path = OUTPUT_PATH / variant_name / env_name
 
     # Set up environments and parameters for the InnerPopulation.
-    environments = make_field(NUM_TRIALS)
+    environments = make_environment(NUM_TRIALS)
     environments.from_numpy(STATIC_ENVIRONMENTS[env_name](NUM_TRIALS))
     params = get_default_params(NUM_TRIALS)
     if not migration:

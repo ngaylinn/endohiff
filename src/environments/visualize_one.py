@@ -17,14 +17,18 @@ def render_env_map(env_data):
     plt.clim(0, MAX_HIFF)
 
 
+def save_env_map(env_data, filename):
+    render_env_map(env_data)
+    plt.savefig(filename, dpi=20)
+    plt.close()
+
+
 def main(input_filename, output_filename=None):
     if output_filename is None:
         output_filename = input_filename.with_suffix('.png')
 
     env_data = np.load(input_filename)
-    render_env_map(env_data)
-    plt.savefig(output_filename, dpi=20)
-    plt.close()
+    save_env_map(env_data, output_filename)
 
     # Indicate the program completed successfully.
     return 0

@@ -9,8 +9,8 @@ import seaborn as sns
 import taichi as ti
 from tqdm import trange
 
-from constants import INNER_GENERATIONS, OUTPUT_PATH
-from environments import STATIC_ENVIRONMENTS, make_field
+from .constants import INNER_GENERATIONS, OUTPUT_PATH
+from .environments.util import STATIC_ENVIRONMENTS, make_environment
 from inner_population import InnerPopulation, get_default_params
 
 
@@ -23,7 +23,7 @@ NUM_PARALLEL = 25
 
 # Set up to run NUM_PARALLEL simulations on the GPU.
 ti.init(ti.cuda)
-env = make_field(NUM_PARALLEL)
+env = make_environments(NUM_PARALLEL)
 env.from_numpy(STATIC_ENVIRONMENTS['baym'](NUM_PARALLEL))
 params = get_default_params(NUM_PARALLEL)
 inner_population = InnerPopulation(NUM_PARALLEL)
@@ -37,6 +37,7 @@ for t in trange(TOTAL_TRIALS // NUM_PARALLEL):
         inner_population.get_logs(0).filter(
             (pl.col('Generation') == INNER_GENERATIONS - 1) &
             (pl.col('alive') == True)
+        # TODO: Count ones for yourself, since inner_population no longer does.
         )['one_count'].to_numpy())
 one_counts = np.concatenate(partial_counts)
 

@@ -1,10 +1,7 @@
-"""The Environments data type and definitions for all control environments.
-"""
-
 import numpy as np
 import taichi as ti
 
-from constants import (
+from ..constants import (
     BITSTR_POWER, BITSTR_LEN,  ENVIRONMENT_SHAPE, MIN_HIFF, MAX_HIFF)
 
 
@@ -22,7 +19,7 @@ def expand_shape(raw_shape=None):
     return shape
 
 
-def make_field(shape=None):
+def make_environment(shape=None):
     shape = expand_shape(shape)
     return ti.field(ti.float16, shape=shape)
 
@@ -51,15 +48,12 @@ STATIC_ENVIRONMENTS = {
     'baym': make_baym,
 }
 
-ALL_ENVIRONMENT_NAMES = sorted(list(STATIC_ENVIRONMENTS.keys()) + ['cppn'])
-
 
 # A demo to visualize any of the environments defined above.
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from visualize_inner_population import render_env_map
+    from .visualize_one import render_env_map
 
-    ti.init(ti.cuda)
-
-    render_env_map(STATIC_ENVIRONMENTS['baym']()[0])
+    render_env_map(make_baym())
     plt.show()
+

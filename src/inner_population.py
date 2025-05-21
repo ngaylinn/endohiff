@@ -247,12 +247,12 @@ class InnerPopulation:
 # A demo to show that evolution is working.
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from environments import make_baym, make_field
-    from visualize_inner_population import render_fitness_map
+    from .environments.util import make_baym, make_environment
+    from .bitstrings.visualize_population import render_fitness_map
 
     ti.init(ti.cuda)
 
-    env = make_field()
+    env = make_environment()
     env.from_numpy(make_baym())
     params = get_default_params()
     inner_population = InnerPopulation()

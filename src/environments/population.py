@@ -1,19 +1,18 @@
-"""A population of CPPNs for generating evolved environments for symbionts.
-"""
+from argparse import ArgumentParser
+from pathlib import Path
+import sys
 
 from neatchi import CppnPopulation, Matchmaker
 import numpy as np
 import polars as pl
 import taichi as ti
 
-from constants import (
-    MAX_HIFF, OUTER_GENERATIONS, OUTER_POPULATION_SIZE, OUTPUT_PATH)
-from environments import make_field
-from visualize_inner_population import save_env_map
+from ..constants import MAX_HIFF, OUTER_GENERATIONS, OUTER_POPULATION_SIZE
+from .util import make_environment
 
 
 @ti.data_oriented
-class OuterPopulation:
+class EnvironmentPopulation:
     def __init__(self, count=1):
         # We will evolve count populations of OUTER_POPULATION_SIZE each, so
         # the number of environments is just the product of those two values.
@@ -39,7 +38,7 @@ class OuterPopulation:
             self.pop_shape, cppn_shape, self.index, self.matchmaker)
 
         # A space to hold the Environments generated using the CPPNs above.
-        self.env = make_field(num_environments)
+        self.env = make_environment(num_environments)
 
     def randomize(self):
         self.cppns.randomize()
@@ -79,25 +78,25 @@ class OuterPopulation:
             'Fitness': fitness.flatten(),
         })
 
-    def visualize(self, path, trial=None):
-        """Save a map for each environment in this population.
-        """
-        # TODO: This is painfully slow. If using this often, maybe consider
-        # optimizing the map rendering?
-        environments = self.env.to_numpy()
-        for e, env in enumerate(environments):
-            # If a trial was specified, skip enviornments NOT from that trial.
-            if trial is not None and self.index[e][0] != trial:
-                continue
-            path.mkdir(exist_ok=True, parents=True)
-            save_env_map(path, env, f'cppn{e}')
 
-
-# A demo to visualize what a random initial population of CPPNs looks like.
-if __name__ == '__main__':
+def main(path):
+    from .visualize_one import save_env_map
     ti.init(ti.cuda)
 
-    outer_population = OuterPopulation()
-    outer_population.randomize()
-    outer_population.make_environments()
-    outer_population.visualize(OUTPUT_PATH / 'random_cppn_environments')
+    path.mkdir(exist_ok=True, parents=True)
+    population = EnvironmentPopulation()
+    population.randomize()
+    population.make_environments()
+    evironments = population.env.to_numpy()
+    for e, env_data in enumerate(evironments):
+        save_env_map(env_data, path / f'cppn_{e}.png')
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser(
+        description='Visualize a random initial popuation of CPPN environments')
+    parser.add_argument(
+        'path', type=Path,
+        help='Where to save the sample environment visualizations')
+    args = vars(parser.parse_args())
+    sys.exit(main(**args))

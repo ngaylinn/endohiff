@@ -1,13 +1,7 @@
-"""Compute fitness of environments from evovability of inner populations.
-
-This class answers the question "which environment was best able to evolve an
-inner population to solve hiff?" All computation happens on the GPU, and
-eventually multiple different fitness criteria will be supported.
-"""
 import numpy as np
 import taichi as ti
 
-from constants import (
+from ..constants import (
     CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
     NUM_TRIALS)
 
@@ -15,23 +9,23 @@ MAX_OUTER_FITNESS = MAX_HIFF + 1
 
 
 @ti.data_oriented
-class FitnessEvaluator:
-    def __init__(self, count=1, outer_population=None):
+class EnvironmentFitnessEvaluator:
+    def __init__(self, count=1, env_pop=None):
         # If there is no outer population, then assume we've got count
-        # inner_populations to work with and set up some fields that can play
+        # bitstr_pops to work with and set up some fields that can play
         # the same role as the index and matchmaker in an outer population.
-        if outer_population is None:
+        if env_pop is None:
             self.fitness = ti.field(float, shape=(1, count, 1))
             self.index = ti.Vector.field(n=2, dtype=int, shape=count)
             self.index.from_numpy(np.array(
                 list(np.ndindex(count, 1)), dtype=np.int32))
         else:
-            self.fitness = outer_population.matchmaker.fitness
-            self.index = outer_population.index
+            self.fitness = env_pop.matchmaker.fitness
+            self.index = env_pop.index
         self.num_environments = self.index.shape[0]
 
     @ti.kernel
-    def get_max_score(self, inner_population: ti.template(), og: int):
+    def get_max_score(self, bitstr_pop: ti.template(), og: int):
         shape = (self.num_environments, INNER_GENERATIONS) + ENVIRONMENT_SHAPE
         # For every location in every environment across all trials and
         # generations...
@@ -42,14 +36,14 @@ class FitnessEvaluator:
             # Find the most fit individual in this local population and compare
             # that to the max score for this environment.
             for ii in ti.ndrange(INNER_GENERATIONS, CARRYING_CAPACITY):
-                individual = inner_population.pop[e, ig, x, y, ii]
+                individual = bitstr_pop.pop[e, ig, x, y, ii]
                 if individual.is_alive():
                     local_max_fitness = max(local_max_fitness,
                                             individual.fitness)
             ti.atomic_max(self.fitness[og, t, oi], local_max_fitness)
 
     @ti.kernel
-    def get_first_instance(self, inner_population: ti.template(), og: int):
+    def get_first_instance(self, bitstr_pop: ti.template(), og: int):
         shape = ENVIRONMENT_SHAPE + (CARRYING_CAPACITY,)
         # For every environment across all trials...
         for e in range(self.num_environments):
@@ -61,7 +55,7 @@ class FitnessEvaluator:
                 # Find the best fitness score in this generation.
                 local_max_fitness = 0.0
                 for x, y, ii in ti.ndrange(*shape):
-                    individual = inner_population.pop[e, ig, x, y, ii]
+                    individual = bitstr_pop.pop[e, ig, x, y, ii]
                     if individual.is_alive():
                         local_max_fitness = max(local_max_fitness,
                                                 individual.fitness)
@@ -74,10 +68,10 @@ class FitnessEvaluator:
                     self.fitness[og, t, oi] = global_max_fitness + earliness
                     break
 
-    def score_populations(self, inner_population, og):
+    def score_populations(self, bitstr_pop, og):
         # TODO: This is very inefficient. Maybe find a better way?
-        self.get_max_score(inner_population, og)
-        self.get_first_instance(inner_population, og)
+        self.get_max_score(bitstr_pop, og)
+        self.get_first_instance(bitstr_pop, og)
 
     @ti.kernel
     def get_best_per_trial(self, og: int) -> ti.types.vector(n=NUM_TRIALS, dtype=int):
@@ -112,15 +106,16 @@ class FitnessEvaluator:
         return self.index[best_index][0]
 
 
-def get_best_trial(inner_population):
-    """A utility for quickly scoring an inner_population without an outer one.
+def get_best_trial(bitstr_pop):
+    """A utility for quickly scoring an bitstr_pop without an outer one.
     """
-    evaluator = FitnessEvaluator(inner_population.shape[0])
-    evaluator.score_populations(inner_population, 0)
+    evaluator = EnvironmentFitnessEvaluator(bitstr_pop.shape[0])
+    evaluator.score_populations(bitstr_pop, 0)
     return evaluator.get_best_trial(0)
 
 
-def get_per_trial_scores(inner_population):
-    evaluator = FitnessEvaluator(inner_population.shape[0])
-    evaluator.score_populations(inner_population, 0)
+def get_per_trial_scores(bitstr_pop):
+    evaluator = EnvironmentFitnessEvaluator(bitstr_pop.shape[0])
+    evaluator.score_populations(bitstr_pop, 0)
     return evaluator.fitness.to_numpy().flatten()
+

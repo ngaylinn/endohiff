@@ -5,12 +5,13 @@ import polars as pl
 import taichi as ti
 
 from constants import OUTPUT_PATH
-from environments import expand_shape, make_field, make_baym
+from .environments.util import make_environments, make_baym
 from inner_population import InnerPopulation, get_default_params
 from visualize_inner_population import visualize_experiment
 
 
 def make_gap(shape=None):
+    # TODO: Make this from the baym environment.
     shape = expand_shape(shape)
     steep = np.full(shape, 320)
     steep[0,    :5 ] = 64
@@ -24,6 +25,7 @@ def make_gap(shape=None):
 
 
 def make_high(shape=None):
+    # TODO: Make this from the baym environment.
     shape = expand_shape(shape)
     high = np.full(shape, 320)
     high[0,   :25] = 320
