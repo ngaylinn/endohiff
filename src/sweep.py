@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-from itertools import combinations
 from pathlib import Path
 import sys
 
@@ -7,28 +6,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import seaborn as sns
-import taichi as ti
-from tqdm import trange
 
 from .constants import CARRYING_CAPACITY, ENV_NAMES
+from .environments.fitness import MAX_OUTER_FITNESS
 from .graphics import BITSTRING_PALETTE, ENV_NAME_PALETTE, FITNESS_DELTA_PALETTE
+from .bitstrings.population import get_default_params
 
-# TODO: Load this from elsewhere.
-MAX_OUTER_FITNESS = 449
-
-# from compare_experiments import HUE_ORDER
-# from constants import (
-#     CARRYING_CAPACITY, ENV_NAMES, NUM_TRIALS, OUTER_GENERATIONS, OUTER_POPULATION_SIZE,
-#     OUTPUT_PATH)
-# from environments import (
-#     ALL_ENVIRONMENT_NAMES, STATIC_ENVIRONMENTS, make_env_field, make_flat)
-# from .bitstrings.population import BitstrPopulation, make_params_field, Params
-# from outer_population import OuterPopulation
-# from outer_fitness import MAX_OUTER_FITNESS, FitnessEvaluator, get_per_trial_scores
 
 SWEEP_SIZE = CARRYING_CAPACITY
 SWEEP_SHAPE = (SWEEP_SIZE, SWEEP_SIZE)
 SWEEP_KINDS = ['selection', 'ratchet']
+
 
 def all_sweep_sample_dirs():
     summaries = []
@@ -102,157 +90,28 @@ class Sweep:
         for i1, i2 in self.sample_points:
             yield self.summary(i1, i2)
 
-#    def iter_batched(self):
-#        # For each setting of param1, return a batch of param settings and
-#        # sample points sweeping all values of param2.
-#        params = get_default_params_numpy(SWEEP_SIZE)
-#        for i1 in range(SWEEP_SIZE):
-#            params[self.param1.key] = self.param1.values[i1]
-#            samples = []
-#            for i2 in range(SWEEP_SIZE):
-#                params[self.param2.key][i2] = self.param2.values[i2]
-#                if any(np.all(self.sample_points == [i1, i2], axis=1)):
-#                    samples.append(i2)
-#            yield (params, i1, samples)
-#
-#    def iter(self):
-#        # Enumerate all combinations of settings for both param1 and param2,
-#        # one at a time.
-#        params = get_default_params_numpy(1)
-#        for i1, i2 in np.ndindex(*SWEEP_SHAPE):
-#            params[self.param1.key] = self.param1.values[i1]
-#            params[self.param2.key] = self.param2.values[i2]
-#            sample = any(np.all(self.sample_points == [i1, i2], axis=1))
-#            yield (params, (i1, i2), sample)
+    def iter_batched(self):
+        # For each setting of param1, return a batch of param settings and
+        # sample points sweeping all values of param2.
+        params = get_default_params(SWEEP_SIZE)
+        for i1 in range(SWEEP_SIZE):
+            params[self.param1.key] = self.param1.values[i1]
+            samples = []
+            for i2 in range(SWEEP_SIZE):
+                params[self.param2.key][i2] = self.param2.values[i2]
+                if any(np.all(self.sample_points == [i1, i2], axis=1)):
+                    samples.append(i2)
+            yield (params, i1, samples)
 
-
-#def bitstr_sweep(sweep, env_data, path, env_name):
-#    # Set up an environment for running these simulations.
-#    batch_size = SWEEP_SIZE * NUM_TRIALS
-#    env = make_env_field(batch_size)
-#    params = make_params_field(batch_size)
-#    bitstr_pop = BitstrPopulation(batch_size)
-#
-#    # Sweep through hyperparameter settings one batch at a time.
-#    print('Evolving bitstrings for all parameters...')
-#    progress = trange(SWEEP_SIZE)
-#    frames = []
-#    for params_data, i1, samples in sweep.iter_batched():
-#        # Evolve a population for each batch of parameter settings, NUM_TRIALS
-#        # times in parallel.
-#        env.from_numpy(env_data[i1].repeat(NUM_TRIALS, axis=0))
-#        params.from_numpy(params_data.repeat(NUM_TRIALS))
-#        bitstr_pop.evolve(env, params)
-#
-#        # Copy fitness scores to the GPU and add them to the logs along with
-#        # the hyperparamter settings that correspond to those results.
-#        frames.append(pl.DataFrame({
-#            sweep.param1.name: params_data[sweep.param1.key].repeat(NUM_TRIALS),
-#            sweep.param2.name: params_data[sweep.param2.key].repeat(NUM_TRIALS),
-#            'Fitness': get_per_trial_scores(bitstr_pop),
-#            'Environment': [env_name] * batch_size,
-#        }))
-#
-#        # For all the sample points in this batch...
-#        for i2 in samples:
-#            for t in range(NUM_TRIALS):
-#                # This whole batch corresponds to one value of i1, but several
-#                # values of i2, each repeated NUM_TRIALS times. So, compute the
-#                # environment index from the parameter and trial indices.
-#                e = i2 * NUM_TRIALS + t
-#
-#                # Record the environment and the full bitstring evolution log
-#                # for all trials with these hyperparameter settings.
-#                sample_path = (
-#                    path / sweep.summary(i1, i2) / env_name / f'trial_{t}')
-#                sample_path.mkdir(exist_ok=True, parents=True)
-#                np.save(sample_path / 'env.npy', env_data[i1, i2])
-#                inner_log = bitstr_pop.get_logs(e)
-#                inner_log.write_parquet(sample_path / f'inner_log.parquet')
-#
-#        progress.update()
-#
-#    return pl.concat(frames)
-#
-#
-#def environment_sweep(sweep, path):
-#    # This number must be some whole multiple of OUTER_POPULATION_SIZE because
-#    # otherwise we'd need more sophisticated logic to score and propagate the
-#    # CPPN population.
-#    sims_per_batch = NUM_TRIALS * OUTER_POPULATION_SIZE
-#
-#    outer_population = OuterPopulation(NUM_TRIALS)
-#    bitstr_pop = BitstrPopulation(sims_per_batch)
-#    params = make_params_field(shape=sims_per_batch)
-#    evaluator = FitnessEvaluator(outer_population=outer_population)
-#    best_envs = make_flat(SWEEP_SHAPE)
-#
-#    print('Evolving environments for all parameters...')
-#    progress = trange(SWEEP_SIZE * SWEEP_SIZE * OUTER_GENERATIONS)
-#    for params_data, sweep_index, sample in sweep.iter():
-#        outer_population.randomize()
-#        for og in range(OUTER_GENERATIONS):
-#            env = outer_population.make_environments()
-#            params.from_numpy(params_data.repeat(sims_per_batch))
-#            bitstr_pop.evolve(env, params)
-#            evaluator.score_populations(bitstr_pop, og)
-#            if og + 1 < OUTER_GENERATIONS:
-#                outer_population.propagate(og)
-#            progress.update()
-#
-#        # TODO: The results actually look really noisy! Occasionally we
-#        # get abysmal performance for a single configuration, when its
-#        # neighbors do fine. Perhaps we could be more clever at picking
-#        # environments from this large population that are more
-#        # reliable, and not just the ones that did best in one trial.
-#        env_data = env.to_numpy()
-#        best_trial = evaluator.get_best_trial(og)
-#        best_envs[sweep_index] = env_data[best_trial]
-#
-#        # TODO: This is doing something a little non-sensical. There are
-#        # actually several sample points per trial, but we're just saving them
-#        # all according to their trial #. Either we should save the env from
-#        # the best trial in all sample conditions, or the best env for each
-#        # trial.
-#        if sample:
-#            sample_path = path / sweep.summary(*sweep_index)/ 'cppn'
-#            sample_path.mkdir(exist_ok=True, parents=True)
-#            outer_population.get_logs().write_parquet(sample_path / 'outer_log.parquet')
-#            for t, e in enumerate(evaluator.get_best_per_trial(og)):
-#                np.save(sample_path / f'cppn_{t}.npy', env_data[e])
-#
-#        progress.update()
-#
-#    return best_envs
-
-
-#def get_data(sweep, path, env_name):
-#    # If this sweep is already completed, just reload the results.
-#    data_filename = path / f'{env_name}.parquet'
-#    if data_filename.exists():
-#        data = pl.read_parquet(data_filename)
-#    else:
-#        # and visualization for sweeps.
-#        # If we're evolving the environments to simulate...
-#        if env_name == 'cppn':
-#            # If we already evolved the environments, just load those from
-#            # disk. Otherwise, evolve a new environment for all the
-#            # hyperparameter settings in this sweep.
-#            envs_path = path / 'cppn_envs.npy'
-#            if envs_path.exists():
-#                env_data = np.load(envs_path)
-#            else:
-#                env_data = environment_sweep(sweep, path)
-#                np.save(envs_path, env_data)
-#        else:
-#            # Otherwise, just grab a static environment by name.
-#            env_data = STATIC_ENVIRONMENTS[env_name](SWEEP_SHAPE)
-#
-#        # Evolve bitstrings in this environment for all the hyperparameter
-#        # settings in this sweep, then save the results to disk.
-#        data = bitstr_sweep(sweep, env_data, path, env_name)
-#        data.write_parquet(data_filename)
-#    return data
+    def iter(self):
+        # Enumerate all combinations of settings for both param1 and param2,
+        # one at a time.
+        params = get_default_params(1)
+        for i1, i2 in np.ndindex(*SWEEP_SHAPE):
+            params[self.param1.key] = self.param1.values[i1]
+            params[self.param2.key] = self.param2.values[i2]
+            sample = any(np.all(self.sample_points == [i1, i2], axis=1))
+            yield (params, (i1, i2), sample)
 
 
 def pivot(sweep, data):

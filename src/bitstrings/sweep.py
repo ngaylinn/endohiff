@@ -1,0 +1,90 @@
+from argparse import ArgumentParser
+from pathlib import Path
+import sys
+
+import numpy as np
+import polars as pl
+from tqdm import trange
+
+from .population import make_params_field, BitstrPopulation
+from ..constants import ENV_NAMES, NUM_TRIALS
+from ..environments.fitness import get_per_trial_env_fitness
+from ..environments.util import STATIC_ENVIRONMENTS, make_env_field
+from ..sweep import SWEEP_KINDS, SWEEP_SIZE, SWEEP_SHAPE, Sweep
+
+
+def main(sweep_kind, env_name, path):
+    if env_name == 'cppn':
+        env_data = np.load(path / 'cppn_envs.npy')
+    else:
+        env_data = STATIC_ENVIRONMENTS[env_name](SWEEP_SHAPE)
+
+    sweep = Sweep(sweep_kind)
+
+    # Set up an environment for running these simulations.
+    batch_size = SWEEP_SIZE * NUM_TRIALS
+    env = make_env_field(batch_size)
+    params = make_params_field(batch_size)
+    bitstr_pop = BitstrPopulation(batch_size)
+
+    # Sweep through hyperparameter settings one batch at a time.
+    print('Evolving bitstrings for all parameters...')
+    progress = trange(SWEEP_SIZE)
+    frames = []
+    for params_data, i1, samples in sweep.iter_batched():
+        # Evolve a population for each batch of parameter settings, NUM_TRIALS
+        # times in parallel.
+        env.from_numpy(env_data[i1].repeat(NUM_TRIALS, axis=0))
+        params.from_numpy(params_data.repeat(NUM_TRIALS))
+        bitstr_pop.evolve(env, params)
+
+        # Copy fitness scores to the GPU and add them to the logs along with
+        # the hyperparamter settings that correspond to those results.
+        frames.append(pl.DataFrame({
+            sweep.param1.name: params_data[sweep.param1.key].repeat(NUM_TRIALS),
+            sweep.param2.name: params_data[sweep.param2.key].repeat(NUM_TRIALS),
+            'Fitness': get_per_trial_env_fitness(bitstr_pop),
+            'Environment': [env_name] * batch_size,
+        }))
+
+        # For all the sample points in this batch...
+        for i2 in samples:
+            for t in range(NUM_TRIALS):
+                # This whole batch corresponds to one value of i1, but several
+                # values of i2, each repeated NUM_TRIALS times. So, compute the
+                # environment index from the parameter and trial indices.
+                e = i2 * NUM_TRIALS + t
+
+                # Record the environment and the full bitstring evolution log
+                # for all trials with these hyperparameter settings.
+                sample_path = (
+                    path / sweep.summary(i1, i2) / env_name / f'trial_{t}')
+                sample_path.mkdir(exist_ok=True, parents=True)
+                np.save(sample_path / 'env.npy', env_data[i1, i2])
+                inner_log = bitstr_pop.get_logs(e)
+                inner_log.write_parquet(sample_path / f'inner_log.parquet')
+
+        progress.update()
+
+    sweep_log = pl.concat(frames)
+    sweep_log.write_parquet(path / f'{env_name}.parquet')
+
+    # Indicate the program completed successfully.
+    return 0
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser(
+        description='Evolve bitstrings across many hyperparameter settings.')
+    parser.add_argument(
+        'sweep_kind', type=str, choices=SWEEP_KINDS,
+        help=f'Which kind of sweep to run (one of {SWEEP_KINDS})')
+    parser.add_argument(
+        'env_name', type=str, choices=ENV_NAMES,
+        help=f'Which environment to use (one of {ENV_NAMES})')
+    parser.add_argument(
+        'path', type=Path,
+        help='Path for all sweep data')
+    args = vars(parser.parse_args())
+    sys.exit(main(**args))
+

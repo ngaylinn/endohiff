@@ -8,7 +8,8 @@ import polars as pl
 import taichi as ti
 
 from ..constants import MAX_HIFF, OUTER_GENERATIONS, OUTER_POPULATION_SIZE
-from .util import make_environment
+from .fitness import eval_env_fitness
+from .util import make_env_field
 
 
 @ti.data_oriented
@@ -38,10 +39,14 @@ class EnvironmentPopulation:
             self.pop_shape, cppn_shape, self.index, self.matchmaker)
 
         # A space to hold the Environments generated using the CPPNs above.
-        self.env = make_environment(num_environments)
+        self.env = make_env_field(num_environments)
 
     def randomize(self):
         self.cppns.randomize()
+
+    def evaluate_fitness(self, bitstr_pop, generation):
+        eval_env_fitness(
+            self.matchmaker.fitness, self.index, bitstr_pop, generation)
 
     def propagate(self, generation):
         # NOTE: make sure to set fitness scores in self.matchmaker.fitness
