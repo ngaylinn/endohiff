@@ -1,3 +1,12 @@
+"""Generate fitness charts comparing the different environments.
+
+This script looks at the bitstring evolution logs from all trials from all
+environments with a single set of hyperparameter settings. It computes which
+trials had the highest scores, and renders charts of the fitness across all
+trials, for each environment, and in a single chart with all environments
+combined.
+"""
+
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
@@ -6,8 +15,8 @@ import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 
-from ..constants import ENV_NAMES, MAX_HIFF, MIN_HIFF
-from ..graphics import ENV_NAME_COLORS
+from src.constants import ENV_NAMES, MAX_HIFF, MIN_HIFF
+from src.graphics import ENV_NAME_COLORS
 
 
 def load_all_log_files(path):
@@ -44,7 +53,9 @@ def indicate_best_trials(path, all_data):
             print(best_trial, file=file, flush=True)
 
 
-def summarize(all_data):
+def aggregate(all_data):
+    # Summarize the mean and max fitness by generation, for each trial of each
+    # environment, in a single data frame.
     return pl.concat((
         all_data.group_by(
             'Environment', 'Trial', 'Generation', maintain_order=True
@@ -63,6 +74,8 @@ def summarize(all_data):
 
 
 def full_range(vector):
+    """For shading the full range of scores across trials in the line charts.
+    """
     return (vector.min(), vector.max())
 
 
@@ -72,6 +85,7 @@ def chart_all(path, all_data):
         hue='Environment', hue_order=ENV_NAMES, style='Aggregation',
         errorbar=full_range, height=2.667, aspect=2, legend=False)
     plt.ylim((MIN_HIFF, MAX_HIFF))
+    # Erase axis labels to make a more compact figure for the paper.
     plt.xlabel('')
     plt.ylabel('')
     plt.tight_layout()
@@ -86,8 +100,6 @@ def chart_one(path, all_data, env_name):
         color=ENV_NAME_COLORS[env_name], style='Aggregation',
         errorbar=full_range, height=3, legend=False)
     plt.ylim((MIN_HIFF, MAX_HIFF))
-    #plt.xlabel('')
-    #plt.ylabel('')
     plt.tight_layout()
     plt.savefig(path / env_name / 'bitstring_fitness.png', dpi=150)
     plt.close()
@@ -97,7 +109,7 @@ def main(path):
     all_data = load_all_log_files(path)
     indicate_best_trials(path, all_data)
 
-    all_data = summarize(all_data)
+    all_data = aggregate(all_data)
     chart_all(path, all_data)
     for env_name in ENV_NAMES:
         chart_one(path, all_data, env_name)

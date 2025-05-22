@@ -2,17 +2,11 @@ TODO:
 - Audit remaining code for refactors:
   - Maybe have paper / supplemental versions of figures?
   - Generate additional samples where CPPN wins
-  - Avoid inner / outer language and talk about bit strings / envs?
-  - Use consistent formatting for "environment" and "bitstring" everywhere. Are they abbreviated?
-  - Rename log files to avoid inner / outer
-  - Add mkdirs to every script that generates output.
   - Sweep logs store env_name, but maybe remove it for consistency with other logs?
   - Capitalize 'fitness' in column names.
   - Store trial as an int column, not string?
-  - Maybe remove remnants of supporting crossover?
-  - Maybe optimize outer_fitness?
+  - Rewrite copy figures
   - Update Snakefile to re-run everything
-  - Revise all comments and documentation
 - Update README.md
 - Update supp.md
   - Add outer fitnes chart

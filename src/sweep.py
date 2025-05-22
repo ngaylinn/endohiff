@@ -1,3 +1,12 @@
+"""Code for running and visualizing hyperparameter sweeps.
+
+The Param and Sweep classes are used to describe two-dimensional sweeps over
+hyperparameters, and all the metadata needed to track sample points in
+hyperparameter space to capture full logs for. The rest of this module is used
+to render the results of running such sweeps on bitstrings and environments,
+using the scripts in the corresponding sub-folders.
+"""
+
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
@@ -7,10 +16,10 @@ import numpy as np
 import polars as pl
 import seaborn as sns
 
-from .constants import CARRYING_CAPACITY, ENV_NAMES
-from .environments.fitness import MAX_OUTER_FITNESS
-from .graphics import BITSTRING_PALETTE, ENV_NAME_PALETTE, FITNESS_DELTA_PALETTE
-from .bitstrings.population import get_default_params
+from src.constants import CARRYING_CAPACITY, ENV_NAMES
+from src.environments.fitness import MAX_OUTER_FITNESS
+from src.graphics import BITSTR_PALETTE, ENV_NAME_PALETTE, FITNESS_DELTA_PALETTE
+from src.bitstrings.population import get_default_params
 
 
 SWEEP_SIZE = CARRYING_CAPACITY
@@ -19,6 +28,8 @@ SWEEP_KINDS = ['selection', 'ratchet']
 
 
 def all_sweep_sample_dirs():
+    """Directories where logs are saved, one for each sample point.
+    """
     summaries = []
     for sweep_kind in SWEEP_KINDS:
         summaries.extend(
@@ -44,7 +55,6 @@ class Sweep:
     """Represents a 2D sweep over a pair of hyperparameters.
     """
     def __init__(self, sweep_kind):
-        # The sweep configurations used by this project:
         if sweep_kind == 'selection':
             self.param1 = Param(
                 'mortality_rate',
@@ -65,7 +75,8 @@ class Sweep:
                 [[1, 2], [1, 6], [5, 2], [5, 6], [12, 2], [12, 6]])
 
     def labels(self):
-        # Format param values for rendering in a Seaborn heatmap
+        # Format param values for rendering in a Seaborn heatmap. We only show
+        # every fourth label to avoid making the charts overcrowded.
         return {
             'xticklabels': [
                 label if i % 4 == 0 else ''
@@ -129,7 +140,7 @@ def draw_sample_points(sweep):
 def render_one(sweep, path, pivot_tables, env_name):
     plt.figure(figsize=(2.667, 2.667))
     sns.heatmap(pivot_tables[env_name], **sweep.labels(), cbar=False,
-                vmin=0, vmax=MAX_OUTER_FITNESS, cmap=BITSTRING_PALETTE)
+                vmin=0, vmax=MAX_OUTER_FITNESS, cmap=BITSTR_PALETTE)
     #draw_sample_points(sweep)
     plt.tight_layout()
     plt.savefig(path / f'{env_name}.png', dpi=150)

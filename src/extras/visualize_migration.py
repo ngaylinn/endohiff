@@ -1,3 +1,6 @@
+"""Visualize how bitstrings move with a particular migration_rate.
+"""
+
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
@@ -6,12 +9,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from ..constants import CARRYING_CAPACITY
+from src.constants import CARRYING_CAPACITY
+
 
 def main(output_file, migration_rate):
+    output_file.parent.mkdir(exist_ok=True, parents=True)
+
     np.random.seed(42)
-    # TODO: What do you want to visualize here? Maybe find a better way to get
-    # the default migration rate? Maybe compare min and max migration rates?
     sns.relplot(
         x=migration_rate * np.random.randn(CARRYING_CAPACITY),
         y=migration_rate * np.random.randn(CARRYING_CAPACITY),
@@ -31,7 +35,7 @@ def main(output_file, migration_rate):
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Visualize bitstring migration rates.')
+        description='Visualize a bitstring migration rate.')
     parser.add_argument(
         'output_file', type=Path,
         help='Where to save a visualization of bistring migration')

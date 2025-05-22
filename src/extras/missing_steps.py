@@ -1,3 +1,6 @@
+"""Evolve bitstrings in variations of the baym environment, with missing steps.
+"""
+
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
@@ -5,10 +8,10 @@ import sys
 import numpy as np
 import taichi as ti
 
-from ..bitstrings.population import BitstrPopulation, make_params_field
-from ..bitstrings.visualize_population import save_fitness_map
-from ..environments.util import make_env_field, make_baym
-from ..environments.visualize_one import save_env_map
+from src.bitstrings.population import BitstrPopulation, make_params_field
+from src.bitstrings.visualize_population import save_fitness_map
+from src.environments.util import make_env_field, make_baym
+from src.environments.visualize_one import save_env_map
 
 
 def make_gap():
@@ -27,24 +30,30 @@ def make_high():
 
 def main(path):
     ti.init(ti.cuda)
+    path.mkdir(exist_ok=True, parents=True)
 
     environments = {
         'baym': make_baym,
-        'gap': make_gap,
+        'gap':  make_gap,
         'high': make_high,
     }
 
-    env = make_env_field()
+    # Setup memory allocations on the GPU.
+    env_field = make_env_field()
+    params_field = make_params_field()
+    bitstr_pop = BitstrPopulation()
     for env_name, make_env in environments.items():
+        # Render the environment and save a visualization.
         env_data = make_env()
         save_env_map(env_data, path / f'{env_name}_env_map.png')
 
-        env.from_numpy(env_data)
-        params = make_params_field()
-        bitstr_pop = BitstrPopulation()
-        bitstr_pop.evolve(env, params)
-        inner_log = bitstr_pop.get_logs(0)
-        save_fitness_map(inner_log, path / f'{env_name}_fitness_map.png')
+        # Push the environment to device, and evolve some bitstrings.
+        env_field.from_numpy(env_data)
+        bitstr_pop.evolve(env_field, params_field)
+
+        # Save a visualization of the final simulation state.
+        bitstr_log = bitstr_pop.get_logs(0)
+        save_fitness_map(bitstr_log, path / f'{env_name}_fitness_map.png')
 
 
 if __name__ == '__main__':

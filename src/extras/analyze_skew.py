@@ -13,15 +13,15 @@ import seaborn as sns
 import taichi as ti
 from tqdm import trange
 
-from ..constants import BITSTR_LEN, INNER_GENERATIONS, OUTPUT_PATH
-from ..environments.util import STATIC_ENVIRONMENTS, make_env_field
-from ..bitstrings.population import BitstrPopulation, make_params_field
+from src.constants import BITSTR_LEN, INNER_GENERATIONS
+from src.environments.util import STATIC_ENVIRONMENTS, make_env_field
+from src.bitstrings.population import BitstrPopulation, make_params_field
 
 
 # Set these as high as you like to improve statistical significance.
-# NUM_PARALELL determines how many trials to run at once on the GPU. Set this
-# as high as your GPU can handle.
-TOTAL_TRIALS = 25 # 10_000
+# NUM_PARALLEL determines how many trials to run at once. Set this as high as
+# your GPU can handle.
+TOTAL_TRIALS = 10_000
 NUM_PARALLEL = 25
 
 
@@ -35,6 +35,8 @@ def count_ones(bitstrs):
 
 def main(output_file):
     ti.init(ti.cuda)
+    output_file.parent.mkdir(exist_ok=True, parents=True)
+
     env = make_env_field(NUM_PARALLEL)
     env.from_numpy(STATIC_ENVIRONMENTS['baym'](NUM_PARALLEL))
     params = make_params_field(NUM_PARALLEL)
@@ -44,10 +46,12 @@ def main(output_file):
     # number of ones found in each evolved bitstring.
     partial_counts = []
     for t in trange(TOTAL_TRIALS // NUM_PARALLEL):
+        # Evolve some bitstrings, then grab the ones that are still alive in
+        # the final generation and count up how many 1 bits they have.
         bitstr_population.evolve(env, params)
         bitstrs = bitstr_population.get_logs(0).filter(
-                (pl.col('Generation') == INNER_GENERATIONS - 1) &
-                (pl.col('alive') == True)
+            (pl.col('Generation') == INNER_GENERATIONS - 1) &
+            (pl.col('alive') == True)
         )['bitstr'].to_numpy()
         partial_counts.append(count_ones(bitstrs))
     one_counts = np.concatenate(partial_counts)

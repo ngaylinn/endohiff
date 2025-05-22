@@ -1,12 +1,16 @@
+"""Compute bitstring fitness with the HIFF function.
+"""
+
 import taichi as ti
 
-from ..constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE
+from src.constants import BITSTR_POWER, BITSTR_LEN, BITSTR_DTYPE
 
 
 @ti.func
 def score_hiff(bitstr):
     # The one-bit substrings are "freebies" and automatically count towards the
-    # hiff score.
+    # hiff score. The HIFF score is an integer, but we use small float values
+    # because that's convenient for calculating envioronmental fitness.
     hiff = ti.cast(BITSTR_LEN, ti.float16)
 
     # For all the powers of two up to BITSTR_LEN, look at all the substrings of
@@ -18,8 +22,7 @@ def score_hiff(bitstr):
         substr_mask = mask
         for s in range(BITSTR_LEN // substr_len):
             # Factor this substr into the final hiff score. It will contribute
-            # substr_len to the hiff score (adjusted by weight) if and only if
-            # it is all 0's or all 1's.
+            # substr_len to the score if and only if it is all 0's or all 1's.
             substr = bitstr & substr_mask
             score = substr_len * int(substr == 0 or substr == substr_mask)
             hiff += ti.cast(score, ti.float16)

@@ -1,9 +1,11 @@
+"""Evaluates the fitness of an environment from bitstrings evolved inside it.
+"""
+
 import numpy as np
 import taichi as ti
 
-from ..constants import (
-    CARRYING_CAPACITY, ENVIRONMENT_SHAPE, INNER_GENERATIONS, MAX_HIFF,
-    NUM_TRIALS)
+from src.constants import (
+    CARRYING_CAPACITY, ENV_SHAPE, ENV_GENERATIONS, MAX_HIFF)
 
 MAX_OUTER_FITNESS = MAX_HIFF + 1
 
@@ -11,16 +13,18 @@ MAX_OUTER_FITNESS = MAX_HIFF + 1
 @ti.kernel
 def eval_env_fitness(fitness: ti.template(), index: ti.template(),
                      bitstr_pop: ti.template(), og: int):
+    """Evaluate the fitness of an EnvPopulation on the GPU.
+    """
     # For every location in every environment across all trials and
     # generations...
-    shape = (index.shape[0], INNER_GENERATIONS) + ENVIRONMENT_SHAPE
+    shape = (index.shape[0], ENV_GENERATIONS) + ENV_SHAPE
     for e, ig, x, y in ti.ndrange(*shape):
         t, oi = index[e]
         local_max_fitness = 0.0
 
         # Find the most fit individual in this deme and compare that to the max
         # score for this environment.
-        for ii in ti.ndrange(INNER_GENERATIONS, CARRYING_CAPACITY):
+        for ii in ti.ndrange(ENV_GENERATIONS, CARRYING_CAPACITY):
             individual = bitstr_pop.pop[e, ig, x, y, ii]
             if individual.is_alive():
                 local_max_fitness = max(local_max_fitness,
@@ -30,11 +34,17 @@ def eval_env_fitness(fitness: ti.template(), index: ti.template(),
         # evolution this high score occurred. Bitstring fitness is always an
         # integer value, and the earliness score is a number betwee 0 and 1, so
         # earliness only serves to break ties.
-        earliness = (INNER_GENERATIONS - ig) / INNER_GENERATIONS
+        earliness = (ENV_GENERATIONS - ig) / ENV_GENERATIONS
         ti.atomic_max(fitness[og, t, oi], local_max_fitness + earliness)
 
 
 def get_per_trial_env_fitness(bitstr_pop):
+    """Evalute the fitness of a static environment.
+
+    This function takes bitstring populations from several trials, and computes
+    the environmental fitness score for each one using the same code used on
+    evolved environments above.
+    """
     # This function is used for evaluating the performance of static
     # environments, and doesn't really need to run on the CPU. However, we want
     # to use exactly the same code used to evaluate the evolved environments,

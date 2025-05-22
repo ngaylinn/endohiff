@@ -1,11 +1,16 @@
+"""Code for managing bitstring reproduction.
+"""
+
 import taichi as ti
 
-from ..constants import (
-    BITSTR_DTYPE, BITSTR_LEN, CARRYING_CAPACITY, MUTATION_MAGNITUDE)
+from src.constants import (
+    BITSTR_DTYPE, CARRYING_CAPACITY, MUTATION_MAGNITUDE)
 
 
 @ti.func
 def mutation() -> BITSTR_DTYPE:
+    """Return a bit mask of point mutations to apply to a bitstr.
+    """
     # Start with a bitstring of all ones, then repeatedly generate random
     # bistrings and combine them using bitwise and. Each bit in the final
     # result will be 1 if and only if it was randomly chosen to be 1 every
@@ -17,17 +22,10 @@ def mutation() -> BITSTR_DTYPE:
     return mutation
 
 
-@ti.func
-def crossover(bitstr1: BITSTR_DTYPE, bitstr2: BITSTR_DTYPE) -> BITSTR_DTYPE:
-    # Do one-point crossover on the two bit strings.
-    crossover_point = ti.random(ti.uint32) % BITSTR_LEN
-    mask = (ti.cast(1, ti.uint64) << crossover_point) - 1
-    return (bitstr1 & mask) | (bitstr2 & ~mask)
-
-
 @ti.data_oriented
 class TournamentArena:
-    """Manages memory allocations for tournament selection."""
+    """Performs tournament selection, and manages the associated GPU memory.
+    """
     def __init__(self, pop):
         # This class is designed to make one selection for every individual in
         # a population.
@@ -40,6 +38,8 @@ class TournamentArena:
 
     @ti.kernel
     def select_all(self, g: int, params: ti.template()):
+        # For each unit of carrying capacity in all demes and simulated
+        # environments, select one relatively fit individual.
         self.seen.fill(False)
         for e, x, y, i in ti.ndrange(*self.selections.shape):
             self.selections[e, x, y, i] = self.select_one(
@@ -52,8 +52,8 @@ class TournamentArena:
         best_fitness = -1.0
 
         for _ in range(tournament_size):
-            # For each tournament, go through the population at this location
-            # starting from a randomly chosen offset.
+            # For each tournament, go through the population at this location,
+            # starting from a randomly chosen offset to avoid a positional bias.
             # NOTE: Careful typing to satisfy Taichi's debugger.
             offset = ti.cast(ti.random(ti.uint32) % CARRYING_CAPACITY, ti.int32)
             for ci in range(CARRYING_CAPACITY):
@@ -67,7 +67,6 @@ class TournamentArena:
                 # Any living individual we find is a candidate for selection.
                 candidate = self.pop[e, g, x, y, c]
                 if candidate.is_alive():
-
                     # Keep track of the best one, who will be the winner.
                     if candidate.fitness > best_fitness:
                         best_index = c
@@ -86,7 +85,7 @@ def validate_selection():
     """
     import numpy as np
 
-    from .population import BitstrIndividual, make_params_field
+    from src.bitstrings.population import BitstrIndividual, make_params_field
 
     # Do selection NUM_TESTS times with all possible values of tournament size
     # (that is, from 1 to CARRYING_CAPACITY, inclusive).
@@ -99,21 +98,21 @@ def validate_selection():
 
     # Set up NUM_TESTS populations of CARRYING_CAPACITY individuals, with
     # fitness values 1..CARRYING_CAPACITY.
-    pop = BitstrIndividual.field(shape=(ne, ig, ew, eh, cc))
-    pop.fitness.from_numpy(
+    bitstr_pop = BitstrIndividual.field(shape=(ne, ig, ew, eh, cc))
+    bitstr_pop.fitness.from_numpy(
         np.tile(
             np.arange(CARRYING_CAPACITY), ew * ne
         ).reshape((ne, ig, ew, eh, cc)))
 
     # Each of the NUM_TESTS populations gets assigned one of the possible
     # values for tournament size, ranging from 1 to CARRYING_CAPACITY.
-    params = make_params_field(CARRYING_CAPACITY)
-    params.tournament_size.from_numpy(
+    params_field = make_params_field(CARRYING_CAPACITY)
+    params_field.tournament_size.from_numpy(
         np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1)
 
     # Do selection on all the populations in parallel!
-    arena = TournamentArena(pop)
-    arena.select_all(0, params)
+    arena = TournamentArena(bitstr_pop)
+    arena.select_all(0, params_field)
 
     # Print a summary of results. When tournament_size == 1, you should get ~13
     # which indicates we picked the median individual on average.
@@ -130,4 +129,3 @@ def validate_selection():
 if __name__ == '__main__':
     ti.init(ti.cuda, debug=True)
     validate_selection()
-

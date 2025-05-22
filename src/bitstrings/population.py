@@ -1,12 +1,19 @@
+"""An evolvable population of bitstrings.
+
+This module contains the BitstrPopulation class, and some related utilities for
+managing the relevant hyperparameter settings. The BitstrPopulation class
+is used to perform bitstring evolution on the GPU, and holds the relevant
+memory allocations.
+"""
+
 import numpy as np
 import polars as pl
 import taichi as ti
 
-from ..constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, CROSSOVER_RATE, ENVIRONMENT_SHAPE,
-    INNER_GENERATIONS)
-from .fitness import score_hiff
-from .reproduction import mutation, crossover, TournamentArena
+from src.constants import (
+    BITSTR_DTYPE, CARRYING_CAPACITY, ENV_SHAPE, BITSTR_GENERATIONS)
+from src.bitstrings.fitness import score_hiff
+from src.bitstrings.reproduction import mutation, TournamentArena
 
 
 @ti.dataclass
@@ -60,17 +67,17 @@ class BitstrIndividual:
 
 @ti.data_oriented
 class BitstrPopulation:
-    def __init__(self, num_environments=1):
-        self.num_environments = num_environments
-        ne = num_environments
-        ig = INNER_GENERATIONS
-        ew, eh = ENVIRONMENT_SHAPE
+    def __init__(self, num_envs=1):
+        self.num_envs = num_envs
+        ne = num_envs
+        bg = BITSTR_GENERATIONS
+        ew, eh = ENV_SHAPE
         cc = CARRYING_CAPACITY
 
         # The shape of the population in each generation
         self.shape = (ne, ew, eh, cc)
         # A full population of individuals for all generations.
-        self.pop = BitstrIndividual.field(shape=(ne, ig, ew, eh, cc))
+        self.pop = BitstrIndividual.field(shape=(ne, bg, ew, eh, cc))
 
         # Per generation metadata that does not get saved.
         # Selections lets us pick fit, living individuals from pop and remember
@@ -83,9 +90,9 @@ class BitstrPopulation:
         # An index with positional metadata for each BitstrIndividual in
         # self.pop, used to generate annotated log files.
         self.index = pl.DataFrame({
-            'Generation':  np.arange(ig).repeat(ew * eh * cc),
-            'x': np.tile(np.arange(ew).repeat(eh * cc), ig),
-            'y': np.tile(np.arange(eh).repeat(cc), ig * ew),
+            'Generation':  np.arange(bg).repeat(ew * eh * cc),
+            'x': np.tile(np.arange(ew).repeat(eh * cc), bg),
+            'y': np.tile(np.arange(eh).repeat(cc), bg * ew),
         })
 
     @ti.kernel
@@ -104,11 +111,12 @@ class BitstrPopulation:
                 self.pop[e, g, x, y, i] = individual
 
     @ti.kernel
-    def cull(self, g: int, environment: ti.template(), params: ti.template()):
+    def cull(self, g: int, env: ti.template(), params: ti.template()):
         for e, x, y, i in ti.ndrange(*self.shape):
             individual = self.pop[e, g, x, y, i]
-            min_fitness = environment[e, x, y]
-            unfit = individual.is_dead() or individual.fitness < min_fitness
+            viability_threshold = env[e, x, y]
+            unfit = (individual.is_dead() or
+                     individual.fitness < viability_threshold)
             unlucky = ti.random() < params[e].mortality_rate
             # Update the next generation to indicate which individuals from
             # this generation survived.
@@ -118,22 +126,14 @@ class BitstrPopulation:
                 self.pop[e, g + 1, x, y, i] = individual
 
     @ti.func
-    def get_child(self, parent, e, g, x, y, i, m, params):
+    def get_child(self, parent, e, g, x, y, i, params):
         # Add one to the children so far, using atomic add to ensure thread
         # safety. The return value is unique to each thread.
         num_children = ti.atomic_add(self.num_children[e, x, y, i], 1)
         child = BitstrIndividual()
         # If this parent hasn't had too many already, generate a new child.
         if num_children + 1 < params[e].fertility_rate:
-            # Do crossover if a mate index was specified.
-            if m >= 0:
-                # Lookup the mate from generation g to populate a child in
-                # generation g+1.
-                mate = self.pop[e, g, x, y, m]
-                child.bitstr = crossover(parent.bitstr, mate.bitstr)
-            else:
-                child.bitstr = parent.bitstr
-            child.bitstr ^= mutation()
+            child.bitstr = parent.bitstr ^ mutation()
         # Otherwise, return a NULL child.
         else:
             child.mark_dead()
@@ -146,12 +146,8 @@ class BitstrPopulation:
             if self.pop[e, g + 1, x, y, i].is_alive():
                 # Then lookup the parent from generation g
                 parent = self.pop[e, g, x, y, i]
-                # Maybe use a mate for crossover.
-                m = -1
-                if ti.random() < CROSSOVER_RATE:
-                    m = self.arena.selections[e, x, y, i]
                 # Generate a child and populate them into this location in g+1.
-                child = self.get_child(parent, e, g, x, y, i, m, params)
+                child = self.get_child(parent, e, g, x, y, i, params)
                 self.pop[e, g + 1, x, y, i] = child
 
     @ti.kernel
@@ -168,8 +164,8 @@ class BitstrPopulation:
                 dx = ti.round(params[e].migration_rate * ti.randn())
                 dy = ti.round(params[e].migration_rate * ti.randn())
                 if dx != 0 or dy != 0:
-                    px = int(ti.math.clamp(x + dx, 0, ENVIRONMENT_SHAPE[0] - 1))
-                    py = int(ti.math.clamp(y + dy, 0, ENVIRONMENT_SHAPE[1] - 1))
+                    px = int(ti.math.clamp(x + dx, 0, ENV_SHAPE[0] - 1))
+                    py = int(ti.math.clamp(y + dy, 0, ENV_SHAPE[1] - 1))
 
                 # Lookup a selected individual from the chosen location in the
                 # previous generation, if there was any.
@@ -177,19 +173,19 @@ class BitstrPopulation:
                 if pi > -1:
                     # Generate a child and place it into generation g+1.
                     parent = self.pop[e, g, px, py, pi]
-                    child = self.get_child(parent, e, g, px, py, pi, -1, params)
+                    child = self.get_child(parent, e, g, px, py, pi, params)
                     self.pop[e, g + 1, x, y, i] = child
 
-    def evolve(self, environments, params):
+    def evolve(self, env, params):
         self.randomize()
-        for generation in range(INNER_GENERATIONS):
+        for generation in range(BITSTR_GENERATIONS):
             # Look at all the bitstrings and determine their fitness, given
             # their local environmental conditions.
             self.evaluate(generation)
-            if generation + 1 < INNER_GENERATIONS:
+            if generation + 1 < BITSTR_GENERATIONS:
                 # Look at individuals in the current generation, see who lives,
                 # and indicate that in the population in the next generation.
-                self.cull(generation, environments, params)
+                self.cull(generation, env, params)
                 # Select fitter individuals from the ones that survived using
                 # tournament selection.
                 self.arena.select_all(generation + 1, params)
@@ -210,8 +206,8 @@ class BitstrPopulation:
     def get_logs_kernel(self, e: int,
                         bitstr: ti.types.ndarray(),
                         fitness: ti.types.ndarray()):
-        ne, ig, ew, eh, cc = self.pop.shape
-        for g, x, y, i in ti.ndrange(ig, ew, eh, cc):
+        ne, bg, ew, eh, cc = self.pop.shape
+        for g, x, y, i in ti.ndrange(bg, ew, eh, cc):
             individual = self.pop[e, g, x, y, i]
             bitstr[g, x, y, i] = individual.bitstr
             fitness[g, x, y, i] = individual.fitness
@@ -236,20 +232,20 @@ class BitstrPopulation:
 # A demo to show that evolution is working.
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from ..environments.util import make_baym, make_env_field
-    from .visualize_population import render_fitness_map
+    from src.environments.util import make_baym, make_env_field
+    from src.bitstrings.visualize_population import render_fitness_map
 
     ti.init(ti.cuda)
 
-    env = make_env_field()
-    env.from_numpy(make_baym())
-    params = make_params_field()
+    env_field = make_env_field()
+    env_field.from_numpy(make_baym())
+    params_field = make_params_field()
     bitstr_population = BitstrPopulation()
 
-    bitstr_population.evolve(env, params)
-    inner_log = bitstr_population.get_logs(0).filter(
-        pl.col('Generation') == INNER_GENERATIONS - 1
+    bitstr_population.evolve(env_field, params_field)
+    bitstr_log = bitstr_population.get_logs(0).filter(
+        pl.col('Generation') == BITSTR_GENERATIONS - 1
     )
-    render_fitness_map(inner_log)
+    render_fitness_map(bitstr_log)
     plt.show()
 

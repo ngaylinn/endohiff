@@ -1,3 +1,6 @@
+"""Render a visualization of HIFF scores for 8-bit numbers.
+"""
+
 from argparse import ArgumentParser
 from pathlib import Path
 import sys
@@ -8,7 +11,7 @@ import polars as pl
 import seaborn as sns
 import taichi as ti
 
-from .. import constants
+from src import constants
 
 # Override some global constants so we can visualize smaller bit strings, which
 # are easier to visualize than the large bit strings we actually evolved. Note
@@ -16,9 +19,9 @@ from .. import constants
 # it, so they see the updated value.
 constants.BITSTR_POWER = 3
 constants.BITSTR_LEN = 2 ** constants.BITSTR_POWER
-NUM_VALUES = 2**constants.BITSTR_LEN
+NUM_VALUES = 2 ** constants.BITSTR_LEN
 
-from ..bitstrings.fitness import score_hiff
+from src.bitstrings.fitness import score_hiff
 
 
 @ti.kernel
@@ -28,12 +31,16 @@ def compute_hiffs(hiffs: ti.template()):
 
 
 def main(output_file):
-    """Visualize the HIFF score for all 8-bit bit strings.
+    """Visualize the HIFF score for all 8-bit bitstrings.
     """
     ti.init(ti.cuda)
+    output_file.parent.mkdir(exist_ok=True, parents=True)
+
+    # Compute hiff scores...
     hiffs = ti.field(ti.float16, shape=NUM_VALUES)
     compute_hiffs(hiffs)
 
+    # Render them in a line chart.
     df = pl.DataFrame({
         'Bistrings (00000000 to 11111111)': np.arange(NUM_VALUES),
         'HIFF Score': hiffs.to_numpy()
