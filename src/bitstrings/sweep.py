@@ -7,6 +7,7 @@ import sys
 
 import numpy as np
 import polars as pl
+import taichi as ti
 from tqdm import trange
 
 from src.bitstrings.population import make_params_field, BitstrPopulation
@@ -17,6 +18,8 @@ from src.sweep import SWEEP_KINDS, SWEEP_SIZE, SWEEP_SHAPE, Sweep
 
 
 def main(path, sweep_kind, env_name):
+    ti.init(ti.cuda)
+
     # If requested, load evolved environments from disk.
     if env_name == 'cppn':
         env_data = np.load(path / 'cppn_envs.npy')

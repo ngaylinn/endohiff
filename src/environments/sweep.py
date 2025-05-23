@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import taichi as ti
 from tqdm import trange
 
 from src.bitstrings.population import make_params_field, BitstrPopulation
@@ -16,6 +17,7 @@ from src.sweep import SWEEP_KINDS, SWEEP_SIZE, SWEEP_SHAPE, Sweep
 
 
 def main(path, sweep_kind):
+    ti.init(ti.cuda)
     path.mkdir(exist_ok=True, parents=True)
     sweep = Sweep(sweep_kind)
 
