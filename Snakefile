@@ -189,4 +189,4 @@ rule visualize_migration:
     'output/migration_0.2.png',
     'output/migration_0.5.png',
     'output/migration_1.0.png',
-  shell: 'python3 -m src.extras.visualize_hiff output'
+  shell: 'python3 -m src.extras.visualize_migration output'
