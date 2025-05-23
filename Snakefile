@@ -137,6 +137,9 @@ rule ratchet_sweep_evolve_environments:
 
 
 rule selection_sweep_evolve_bitstrings:
+  input:
+    # This is only needed if env_name == cppn, but adding it always for simplicity.
+    'output/selection_sweep/cppn_envs.npy',
   output:
     'output/selection_sweep/{env_name}.parquet',
     expand('output/selection_sweep/{sample_dir}/{{env_name}}/trial_{trial}/env.npy',
@@ -148,6 +151,9 @@ rule selection_sweep_evolve_bitstrings:
 
 
 rule ratchet_sweep_evolve_bitstrings:
+  input:
+    # This is only needed if env_name == cppn, but adding it always for simplicity.
+    'output/ratchet_sweep/cppn_envs.npy',
   output:
     'output/ratchet_sweep/{env_name}.parquet',
     expand('output/ratchet_sweep/{sample_dir}/{{env_name}}/trial_{trial}/env.npy',
