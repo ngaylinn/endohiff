@@ -55,7 +55,7 @@ def save_fitness_animation(log_data, output_filename):
     fig = frameless_figure()
     image = plt.imshow(
         spatialize_pop_data(fitness_by_generation[0]),
-        plt.get_cmap(BITSTRING_PALETTE).with_extremes(bad='black'))
+        plt.get_cmap(BITSTR_PALETTE).with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
     def animate_func(generation):
         image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
