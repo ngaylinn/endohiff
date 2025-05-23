@@ -15,7 +15,7 @@ from src.environments.util import make_flat
 from src.sweep import SWEEP_KINDS, SWEEP_SIZE, SWEEP_SHAPE, Sweep
 
 
-def main(sweep_kind, path):
+def main(path, sweep_kind):
     path.mkdir(exist_ok=True, parents=True)
     sweep = Sweep(sweep_kind)
 
@@ -79,11 +79,12 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description='Evolve environments across many hyperparameter settings.')
     parser.add_argument(
-        'sweep_kind', type=str, choices=SWEEP_KINDS,
-        help=f'Which kind of sweep to run (one of {SWEEP_KINDS})')
-    parser.add_argument(
         'path', type=Path,
         help=f'Path for all sweep data')
+    parser.add_argument(
+        'sweep_kind', type=str, choices=SWEEP_KINDS,
+        help=f'Which kind of sweep to run (one of {SWEEP_KINDS})')
     args = vars(parser.parse_args())
+
     sys.exit(main(**args))
 

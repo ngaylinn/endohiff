@@ -1,4 +1,4 @@
-"""Visualize how bitstrings move with a particular migration_rate.
+"""Visualize how bitstrings move with different migration_rates.
 """
 
 from argparse import ArgumentParser
@@ -12,22 +12,23 @@ import seaborn as sns
 from src.constants import CARRYING_CAPACITY
 
 
-def main(output_file, migration_rate):
-    output_file.parent.mkdir(exist_ok=True, parents=True)
+def main(path):
+    path.mkdir(exist_ok=True, parents=True)
 
-    np.random.seed(42)
-    sns.relplot(
-        x=migration_rate * np.random.randn(CARRYING_CAPACITY),
-        y=migration_rate * np.random.randn(CARRYING_CAPACITY),
-        kind='scatter'
-    )
-    plt.xticks([-1.5, -0.5, 0.5, 1.5], labels=[])
-    plt.xticks([-1, 0, 1], labels=['-1', '0', '+1'], minor=True)
-    plt.yticks([-1.5, -0.5, 0.5, 1.5], labels=[])
-    plt.yticks([-1, 0, 1], labels=['-1', '0', '+1'], minor=True)
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig(output_file)
+    for migration_rate in [0.2, 0.5, 1.0]:
+        np.random.seed(42)
+        sns.relplot(
+            x=migration_rate * np.random.randn(CARRYING_CAPACITY),
+            y=migration_rate * np.random.randn(CARRYING_CAPACITY),
+            kind='scatter'
+        )
+        plt.xticks([-1.5, -0.5, 0.5, 1.5], labels=[])
+        plt.xticks([-1, 0, 1], labels=['-1', '0', '+1'], minor=True)
+        plt.yticks([-1.5, -0.5, 0.5, 1.5], labels=[])
+        plt.yticks([-1, 0, 1], labels=['-1', '0', '+1'], minor=True)
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(path / f'migration_{migration_rate:0.1f}.png')
 
     # Indicate the program completed successfully.
     return 0
@@ -35,12 +36,9 @@ def main(output_file, migration_rate):
 
 if __name__ == '__main__':
     parser = ArgumentParser(
-        description='Visualize a bitstring migration rate.')
+        description='Visualize bitstring migration at a few rates.')
     parser.add_argument(
-        'output_file', type=Path,
-        help='Where to save a visualization of bistring migration')
-    parser.add_argument(
-        '--migration_rate', '-mr', type=float, default=0.5,
-        help='Migration rate to visualize (default is 0.5)')
+        'path', type=Path,
+        help='Where to save visualizations of bistring migration')
     args = vars(parser.parse_args())
     sys.exit(main(**args))

@@ -16,7 +16,7 @@ from src.environments.util import STATIC_ENVIRONMENTS, make_env_field
 from src.sweep import SWEEP_KINDS, SWEEP_SIZE, SWEEP_SHAPE, Sweep
 
 
-def main(sweep_kind, env_name, path):
+def main(path, sweep_kind, env_name):
     # If requested, load evolved environments from disk.
     if env_name == 'cppn':
         env_data = np.load(path / 'cppn_envs.npy')
@@ -82,14 +82,14 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description='Evolve bitstrings across many hyperparameter settings.')
     parser.add_argument(
+        'path', type=Path,
+        help='Path for all sweep data')
+    parser.add_argument(
         'sweep_kind', type=str, choices=SWEEP_KINDS,
         help=f'Which kind of sweep to run (one of {SWEEP_KINDS})')
     parser.add_argument(
         'env_name', type=str, choices=ENV_NAMES,
         help=f'Which environment to use (one of {ENV_NAMES})')
-    parser.add_argument(
-        'path', type=Path,
-        help='Path for all sweep data')
     args = vars(parser.parse_args())
     sys.exit(main(**args))
 

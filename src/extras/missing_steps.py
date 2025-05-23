@@ -28,21 +28,22 @@ def make_high():
     return high
 
 
+MISSING_STEP_ENVS = {
+    'baym': make_baym,
+    'gap':  make_gap,
+    'high': make_high,
+}
+
+
 def main(path):
     ti.init(ti.cuda)
     path.mkdir(exist_ok=True, parents=True)
-
-    environments = {
-        'baym': make_baym,
-        'gap':  make_gap,
-        'high': make_high,
-    }
 
     # Setup memory allocations on the GPU.
     env_field = make_env_field()
     params_field = make_params_field()
     bitstr_pop = BitstrPopulation()
-    for env_name, make_env in environments.items():
+    for env_name, make_env in MISSING_STEP_ENVS.items():
         # Render the environment and save a visualization.
         env_data = make_env()
         save_env_map(env_data, path / f'{env_name}_env_map.png')

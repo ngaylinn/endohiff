@@ -27,15 +27,13 @@ SWEEP_SHAPE = (SWEEP_SIZE, SWEEP_SIZE)
 SWEEP_KINDS = ['selection', 'ratchet']
 
 
-def all_sweep_sample_dirs():
+def sweep_samples():
     """Directories where logs are saved, one for each sample point.
     """
-    summaries = []
-    for sweep_kind in SWEEP_KINDS:
-        summaries.extend(
-            [f'{sweep_kind}_sweep/{summaries}' for summaries in
-             Sweep(sweep_kind).iter_sample_summaries()])
-    return summaries
+    return {
+        sweep_kind: list(Sweep(sweep_kind).iter_sample_summaries())
+        for sweep_kind in SWEEP_KINDS
+    }
 
 
 class Param:
