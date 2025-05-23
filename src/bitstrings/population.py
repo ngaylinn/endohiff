@@ -48,6 +48,7 @@ def make_params_field(shape=(1,)):
     return field
 
 
+@ti.func
 def mutation() -> BITSTR_DTYPE:
     """Return a bit mask of point mutations to apply to a bitstr.
     """
