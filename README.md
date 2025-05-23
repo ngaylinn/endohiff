@@ -5,10 +5,10 @@ This repo holds the source code for the paper *Ramps and Ratchets: Evolving Spat
 Supplemental figures to accompany the paper can be found [here](./supp.md).
 
 ## Table of Contents
-- (About this Project)[#about-this-project]
-- (Tour of the Code)[#tour-of-the-code]
-- (Installation)[#installation]
-- (Reproducing Results)[#reproducing-results]
+- [About this Project](#about-this-project)
+- [Tour of the Code](#tour-of-the-code)
+- [Installation](#installation)
+- [Reproducing Results](#reproducing-results)
 
 ## About this Project
 
