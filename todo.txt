@@ -1,10 +1,6 @@
 TODO:
 - Audit remaining code for refactors:
-  - Maybe have paper / supplemental versions of figures?
   - Generate additional samples where CPPN wins
-  - Sweep logs store env_name, but maybe remove it for consistency with other logs?
-  - Capitalize 'fitness' in column names.
-  - Store trial as an int column, not string?
   - Rewrite copy figures
   - Update Snakefile to re-run everything
 - Update README.md

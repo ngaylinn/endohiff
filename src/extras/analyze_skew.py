@@ -13,7 +13,7 @@ import seaborn as sns
 import taichi as ti
 from tqdm import trange
 
-from src.constants import BITSTR_LEN, INNER_GENERATIONS
+from src.constants import BITSTR_LEN, BITSTR_GENERATIONS
 from src.environments.util import STATIC_ENVIRONMENTS, make_env_field
 from src.bitstrings.population import BitstrPopulation, make_params_field
 
@@ -50,9 +50,9 @@ def main(output_file):
         # the final generation and count up how many 1 bits they have.
         bitstr_population.evolve(env, params)
         bitstrs = bitstr_population.get_logs(0).filter(
-            (pl.col('Generation') == INNER_GENERATIONS - 1) &
-            (pl.col('alive') == True)
-        )['bitstr'].to_numpy()
+            (pl.col('Generation') == BITSTR_GENERATIONS - 1) &
+            (pl.col('Alive') == True)
+        )['Bitstr'].to_numpy()
         partial_counts.append(count_ones(bitstrs))
     one_counts = np.concatenate(partial_counts)
 

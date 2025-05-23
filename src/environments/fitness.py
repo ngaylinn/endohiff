@@ -7,7 +7,7 @@ import taichi as ti
 from src.constants import (
     CARRYING_CAPACITY, ENV_SHAPE, ENV_GENERATIONS, MAX_HIFF)
 
-MAX_OUTER_FITNESS = MAX_HIFF + 1
+MAX_ENV_FITNESS = MAX_HIFF + 1
 
 
 @ti.kernel

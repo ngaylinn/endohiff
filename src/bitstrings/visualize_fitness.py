@@ -23,17 +23,17 @@ def load_all_log_files(path):
     all_frames = []
     for env_name in ENV_NAMES:
         for trial_path in (path / env_name).glob('trial_?/'):
-            inner_log = pl.read_parquet(
-                trial_path / 'inner_log.parquet'
+            bitstr_log = pl.read_parquet(
+                trial_path / 'bitstr_log.parquet'
             ).filter(
-                pl.col('alive') == True
+                pl.col('Alive') == True
             ).select(
-                'fitness', 'Generation'
+                'Fitness', 'Generation'
             ).with_columns(
                 Environment=pl.lit(env_name),
                 Trial=pl.lit(trial_path.stem)
             )
-            all_frames.append(inner_log)
+            all_frames.append(bitstr_log)
 
     all_data = pl.concat(all_frames)
     del all_frames
@@ -45,7 +45,7 @@ def indicate_best_trials(path, all_data):
         best_trial = all_data.filter(
             pl.col('Environment') == env_name
         ).filter(
-            pl.col('fitness') == pl.col('fitness').max()
+            pl.col('Fitness') == pl.col('Fitness').max()
         ).filter(
             pl.col('Generation') == pl.col('Generation').min()
         )['Trial'][0]
@@ -60,14 +60,14 @@ def aggregate(all_data):
         all_data.group_by(
             'Environment', 'Trial', 'Generation', maintain_order=True
         ).agg(
-            pl.col('fitness').max().alias('Fitness')
+            pl.col('Fitness').max()
         ).with_columns(
             Aggregation=pl.lit('max')
         ),
         all_data.group_by(
             'Environment', 'Trial', 'Generation', maintain_order=True
         ).agg(
-            pl.col('fitness').mean().alias('Fitness')
+            pl.col('Fitness').mean()
         ).with_columns(
             Aggregation=pl.lit('mean')
         )))
@@ -101,7 +101,7 @@ def chart_one(path, all_data, env_name):
         errorbar=full_range, height=3, legend=False)
     plt.ylim((MIN_HIFF, MAX_HIFF))
     plt.tight_layout()
-    plt.savefig(path / env_name / 'bitstring_fitness.png', dpi=150)
+    plt.savefig(path / env_name / 'bitstr_fitness.png', dpi=150)
     plt.close()
 
 

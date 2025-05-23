@@ -7,7 +7,7 @@ to render the results of running such sweeps on bitstrings and environments,
 using the scripts in the corresponding sub-folders.
 """
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from pathlib import Path
 import sys
 
@@ -17,7 +17,7 @@ import polars as pl
 import seaborn as sns
 
 from src.constants import CARRYING_CAPACITY, ENV_NAMES
-from src.environments.fitness import MAX_OUTER_FITNESS
+from src.environments.fitness import MAX_ENV_FITNESS
 from src.graphics import BITSTR_PALETTE, ENV_NAME_PALETTE, FITNESS_DELTA_PALETTE
 from src.bitstrings.population import get_default_params
 
@@ -63,7 +63,8 @@ class Sweep:
                 'tournament_size',
                 np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1)
             self.sample_points = np.array(
-                [[3, 5], [1, 10], [0, 18], [8, 18], [12, 10], [16, 18]])
+                [[0, 18], [1, 4], [3, 2], [3, 7], [6, 4],
+                 [8, 18], [12, 10], [16, 18]])
         elif sweep_kind == 'ratchet':
             self.param1 = Param(
                 'migration_rate',
@@ -137,23 +138,25 @@ def draw_sample_points(sweep):
     plt.plot(x_points, y_points, 'kx', ms=10)
 
 
-def render_one(sweep, path, pivot_tables, env_name):
+def render_one(sweep, path, pivot_tables, env_name, mark_samples):
     plt.figure(figsize=(2.667, 2.667))
     sns.heatmap(pivot_tables[env_name], **sweep.labels(), cbar=False,
-                vmin=0, vmax=MAX_OUTER_FITNESS, cmap=BITSTR_PALETTE)
-    #draw_sample_points(sweep)
+                vmin=0, vmax=MAX_ENV_FITNESS, cmap=BITSTR_PALETTE)
+    if mark_samples:
+        draw_sample_points(sweep)
     plt.tight_layout()
     plt.savefig(path / f'{env_name}.png', dpi=150)
     plt.close()
 
 
-def render_comparisons(sweep, path, pivot_tables):
+def render_comparisons(sweep, path, pivot_tables, mark_samples):
     def render_delta(delta, filename):
         plt.figure(figsize=(2.667, 2.667))
-        sns.heatmap(delta / MAX_OUTER_FITNESS, **sweep.labels(),
+        sns.heatmap(delta / MAX_ENV_FITNESS, **sweep.labels(),
                     vmin=-0.5, vmax=0.5, center=0,
                     cmap=FITNESS_DELTA_PALETTE, cbar=False)
-        #draw_sample_points(sweep)
+        if mark_samples:
+            draw_sample_points(sweep)
         plt.tight_layout()
         plt.savefig(filename, dpi=150)
         plt.close()
@@ -180,19 +183,23 @@ def chart_histogram(path, all_data):
     plt.close()
 
 
-def main(path, sweep_kind):
+def main(path, sweep_kind, mark_samples):
     sweep = Sweep(sweep_kind)
 
     frames = []
     pivot_tables = {}
     for env_name in ENV_NAMES:
-        env_data = pl.read_parquet(path / f'{env_name}.parquet')
+        env_data = pl.read_parquet(
+            path / f'{env_name}.parquet'
+        ).with_columns(
+            Environment=pl.lit(env_name)
+        )
         frames.append(env_data)
         pivot_tables[env_name] = pivot(sweep, env_data)
-        render_one(sweep, path, pivot_tables, env_name)
+        render_one(sweep, path, pivot_tables, env_name, mark_samples)
     all_data = pl.concat(frames)
 
-    render_comparisons(sweep, path, pivot_tables)
+    render_comparisons(sweep, path, pivot_tables, mark_samples)
     chart_histogram(path, all_data)
 
     # Indicate the program completed successfully.
@@ -208,6 +215,9 @@ if __name__ == '__main__':
     parser.add_argument(
         'sweep_kind', type=str, choices=SWEEP_KINDS,
         help='Which kind of hyparparameter sweep (deterimes sample points).')
+    parser.add_argument(
+        '--mark_samples', '-s', type=BooleanOptionalAction, default=True,
+        help='Show where in the sweep full-logs were sampled')
     args = vars(parser.parse_args())
 
     sys.exit(main(**args))

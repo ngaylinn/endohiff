@@ -221,9 +221,9 @@ class BitstrPopulation:
 
         # Make a data frame and annotate it with the premade index.
         return pl.DataFrame({
-            'bitstr': bitstr.ravel(),
-            'fitness': fitness.ravel(),
-            'alive': ~np.isnan(fitness.ravel()),
+            'Bitstr': bitstr.ravel(),
+            'Fitness': fitness.ravel(),
+            'Alive': ~np.isnan(fitness.ravel()),
         }).hstack(
             self.index
         )

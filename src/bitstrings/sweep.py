@@ -50,7 +50,6 @@ def main(sweep_kind, env_name, path):
             sweep.param1.name: params_data[sweep.param1.key].repeat(NUM_TRIALS),
             sweep.param2.name: params_data[sweep.param2.key].repeat(NUM_TRIALS),
             'Fitness': get_per_trial_env_fitness(bitstr_pop),
-            'Environment': [env_name] * batch_size,
         }))
 
         # For all the sample points in this batch...

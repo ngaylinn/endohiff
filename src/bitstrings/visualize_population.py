@@ -29,11 +29,11 @@ def spatialize_pop_data(pop_data):
         ew=ew, eh=eh, cw=cw, ch=ch)
 
 
-def render_fitness_map(inner_log):
+def render_fitness_map(bitstr_log):
     frameless_figure()
-    pop_data = inner_log.filter(
+    pop_data = bitstr_log.filter(
         pl.col('Generation') == BITSTR_GENERATIONS - 1
-    ).select('fitness').to_numpy().squeeze()
+    ).select('Fitness').to_numpy().squeeze()
     plt.imshow(spatialize_pop_data(pop_data),
                plt.get_cmap(BITSTR_PALETTE).with_extremes(bad='black'))
     plt.clim(0, MAX_HIFF)
@@ -48,8 +48,8 @@ def save_fitness_map(log_data, output_filename):
 def save_fitness_animation(log_data, output_filename):
     # Grab the data we need and split it by generation.
     fitness_by_generation = log_data.select(
-        'fitness'
-    ).to_numpy().reshape(INNER_GENERATIONS, -1)
+        'Fitness'
+    ).to_numpy().reshape(BITSTR_GENERATIONS, -1)
 
     # Render the first frame, and make an animation for the rest.
     fig = frameless_figure()
@@ -60,7 +60,7 @@ def save_fitness_animation(log_data, output_filename):
     def animate_func(generation):
         image.set_array(spatialize_pop_data(fitness_by_generation[generation]))
         return image
-    anim = FuncAnimation(fig, animate_func, INNER_GENERATIONS, interval=100)
+    anim = FuncAnimation(fig, animate_func, BITSTR_GENERATIONS, interval=100)
 
     # Choose an appropriate animation writer for this output file, and save.
     match output_filename.suffix:
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         description='Visualize the fitness of a spatial bitstring population.')
     parser.add_argument(
         'input_file', type=Path,
-        help='A bitstring evolution log to visualize (inner_log.parquet)')
+        help='A bitstring evolution log to visualize (bitstr_log.parquet)')
     parser.add_argument(
         '--output_file', '-o', type=Path, default=None,
         help='Where to save the image (defaults to fitness_map.png)')

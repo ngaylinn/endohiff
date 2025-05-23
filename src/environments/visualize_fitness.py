@@ -31,7 +31,7 @@ if __name__ == '__main__':
         description='Chart the fitness over generations for an environment.')
     parser.add_argument(
         'input_file', type=Path,
-        help='An environment evolution log to visualize (outer_log.parquet)')
+        help='An environment evolution log to visualize (env_log.parquet)')
     parser.add_argument(
         '--output_file', '-o', type=Path, default=None,
         help='Where to save the image (defaults to fitness.png)')
