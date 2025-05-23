@@ -11,9 +11,10 @@ import polars as pl
 import taichi as ti
 
 from src.constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, ENV_SHAPE, BITSTR_GENERATIONS)
+    BITSTR_DTYPE, CARRYING_CAPACITY, ENV_SHAPE, BITSTR_GENERATIONS,
+    MUTATION_MAGNITUDE)
 from src.bitstrings.fitness import score_hiff
-from src.bitstrings.reproduction import mutation, TournamentArena
+from src.bitstrings.tournament_selection import TournamentArena
 
 
 @ti.dataclass
@@ -45,6 +46,20 @@ def make_params_field(shape=(1,)):
     field = Params.field(shape=shape)
     field.from_numpy(get_default_params(shape))
     return field
+
+
+def mutation() -> BITSTR_DTYPE:
+    """Return a bit mask of point mutations to apply to a bitstr.
+    """
+    # Start with a bitstring of all ones, then repeatedly generate random
+    # bistrings and combine them using bitwise and. Each bit in the final
+    # result will be 1 if and only if it was randomly chosen to be 1 every
+    # time. Since each bit has a 1/2 probability of being 1 in each iteration,
+    # the final probability of each bit being set is 1/(2**MUTATION_MAGNITUDE)
+    mutation = ti.cast(-1, BITSTR_DTYPE)
+    for _ in range(MUTATION_MAGNITUDE):
+        mutation &= ti.random(BITSTR_DTYPE)
+    return mutation
 
 
 @ti.dataclass

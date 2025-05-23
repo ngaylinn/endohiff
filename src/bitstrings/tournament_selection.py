@@ -1,31 +1,13 @@
-"""Code for managing bitstring reproduction.
+"""A class for performing tournament selection on a GPU.
 """
 
 import taichi as ti
 
-from src.constants import (
-    BITSTR_DTYPE, CARRYING_CAPACITY, MUTATION_MAGNITUDE)
-
-
-@ti.func
-def mutation() -> BITSTR_DTYPE:
-    """Return a bit mask of point mutations to apply to a bitstr.
-    """
-    # Start with a bitstring of all ones, then repeatedly generate random
-    # bistrings and combine them using bitwise and. Each bit in the final
-    # result will be 1 if and only if it was randomly chosen to be 1 every
-    # time. Since each bit has a 1/2 probability of being 1 in each iteration,
-    # the final probability of each bit being set is 1/(2**MUTATION_MAGNITUDE)
-    mutation = ti.cast(-1, BITSTR_DTYPE)
-    for _ in range(MUTATION_MAGNITUDE):
-        mutation &= ti.random(BITSTR_DTYPE)
-    return mutation
+from src.constants import CARRYING_CAPACITY
 
 
 @ti.data_oriented
 class TournamentArena:
-    """Performs tournament selection, and manages the associated GPU memory.
-    """
     def __init__(self, pop):
         # This class is designed to make one selection for every individual in
         # a population.
@@ -129,3 +111,4 @@ def validate_selection():
 if __name__ == '__main__':
     ti.init(ti.cuda, debug=True)
     validate_selection()
+
