@@ -121,6 +121,7 @@ rule selection_sweep_evolve_environments:
            sample_dir=SWEEP_SAMPLES['selection'], trial=TRIALS),
     expand('output/selection_sweep/{sample_dir}/cppn/env_log.parquet',
            sample_dir=SWEEP_SAMPLES['selection'], trial=TRIALS),
+  resources: gpu=1 # This process expects to monopolize the GPU.
   shell: 'python3 -m src.environments.sweep output/selection_sweep selection'
 
 
@@ -131,6 +132,7 @@ rule ratchet_sweep_evolve_environments:
            sample_dir=SWEEP_SAMPLES['ratchet'], trial=TRIALS),
     expand('output/ratchet_sweep/{sample_dir}/cppn/env_log.parquet',
            sample_dir=SWEEP_SAMPLES['ratchet'], trial=TRIALS),
+  resources: gpu=1 # This process expects to monopolize the GPU.
   shell: 'python3 -m src.environments.sweep output/ratchet_sweep ratchet'
 
 
@@ -141,6 +143,7 @@ rule selection_sweep_evolve_bitstrings:
            sample_dir=SWEEP_SAMPLES['selection'], trial=TRIALS),
     expand('output/selection_sweep/{sample_dir}/{{env_name}}/trial_{trial}/bitstr_log.parquet',
            sample_dir=SWEEP_SAMPLES['selection'], trial=TRIALS),
+  resources: gpu=1 # This process expects to monopolize the GPU.
   shell: 'python3 -m src.bitstrings.sweep output/selection_sweep selection {wildcards.env_name}'
 
 
@@ -151,6 +154,7 @@ rule ratchet_sweep_evolve_bitstrings:
            sample_dir=SWEEP_SAMPLES['ratchet'], trial=TRIALS),
     expand('output/ratchet_sweep/{sample_dir}/{{env_name}}/trial_{trial}/bitstr_log.parquet',
            sample_dir=SWEEP_SAMPLES['ratchet'], trial=TRIALS),
+  resources: gpu=1 # This process expects to monopolize the GPU.
   shell: 'python3 -m src.bitstrings.sweep output/ratchet_sweep ratchet {wildcards.env_name}'
 
 
