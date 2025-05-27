@@ -20,7 +20,7 @@ rule all:
            sweep_sample_dir=ALL_SAMPLE_DIRS, env_name=ENV_NAMES, trial=TRIALS),
     expand('output/{sweep_sample_dir}/{env_name}/best_trial.txt',
            sweep_sample_dir=ALL_SAMPLE_DIRS, env_name=ENV_NAMES),
-    expand('output/{sweep_sample_dir}/{env_name}/bitstring_fitness.png',
+    expand('output/{sweep_sample_dir}/{env_name}/bitstr_fitness.png',
            sweep_sample_dir=ALL_SAMPLE_DIRS, env_name=ENV_NAMES),
     expand('output/{sweep_sample_dir}/cppn/cppn_{trial}.png',
            sweep_sample_dir=ALL_SAMPLE_DIRS, trial=TRIALS),
@@ -94,7 +94,7 @@ rule summarize_sample_dir:
            env_name=ENV_NAMES, trial=TRIALS),
   output:
     expand('{{path}}/{env_name}/best_trial.txt', env_name=ENV_NAMES),
-    expand('{{path}}/{env_name}/bitstring_fitness.png', env_name=ENV_NAMES),
+    expand('{{path}}/{env_name}/bitstr_fitness.png', env_name=ENV_NAMES),
     '{path}/fitness_comparison.png',
   shell: 'python3 -m src.bitstrings.visualize_fitness {wildcards.path}'
 
