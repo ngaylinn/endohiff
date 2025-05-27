@@ -24,7 +24,7 @@ rule all:
            sweep_sample_dir=ALL_SAMPLE_DIRS, env_name=ENV_NAMES),
     expand('output/{sweep_sample_dir}/cppn/cppn_{trial}.png',
            sweep_sample_dir=ALL_SAMPLE_DIRS, trial=TRIALS),
-    expand('output/{sweep_sample_dir}/cppn/environment_fitness.png',
+    expand('output/{sweep_sample_dir}/cppn/env_fitness.png',
            sweep_sample_dir=ALL_SAMPLE_DIRS),
     expand('output/{sweep_sample_dir}/fitness_comparison.png',
            sweep_sample_dir=ALL_SAMPLE_DIRS),
@@ -68,7 +68,7 @@ rule chart_environment_fitness:
   input:
     '{path}/env_log.parquet',
   output:
-    '{path}/environment_fitness.png',
+    '{path}/env_fitness.png',
   shell: 'python3 -m src.environments.visualize_fitness {input}'
 
 
