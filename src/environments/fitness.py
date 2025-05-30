@@ -5,7 +5,7 @@ import numpy as np
 import taichi as ti
 
 from src.constants import (
-    CARRYING_CAPACITY, ENV_SHAPE, ENV_GENERATIONS, MAX_HIFF)
+    CARRYING_CAPACITY, ENV_SHAPE, BITSTR_GENERATIONS, MAX_HIFF)
 
 MAX_ENV_FITNESS = MAX_HIFF + 1
 
@@ -17,15 +17,15 @@ def eval_env_fitness(fitness: ti.template(), index: ti.template(),
     """
     # For every location in every environment across all trials and
     # generations...
-    shape = (index.shape[0], ENV_GENERATIONS) + ENV_SHAPE
-    for e, ig, x, y in ti.ndrange(*shape):
+    shape = (index.shape[0], BITSTR_GENERATIONS) + ENV_SHAPE
+    for e, bg, x, y in ti.ndrange(*shape):
         t, ei = index[e]
         local_max_fitness = 0.0
 
         # Find the most fit individual in this deme and compare that to the max
         # score for this environment.
         for bi in range(CARRYING_CAPACITY):
-            individual = bitstr_pop.pop[e, ig, x, y, bi]
+            individual = bitstr_pop.pop[e, bg, x, y, bi]
             if individual.is_alive():
                 local_max_fitness = max(local_max_fitness,
                                         individual.fitness)
@@ -34,7 +34,7 @@ def eval_env_fitness(fitness: ti.template(), index: ti.template(),
         # evolution this high score occurred. Bitstring fitness is always an
         # integer value, and the earliness score is a number betwee 0 and 1, so
         # earliness only serves to break ties.
-        earliness = (ENV_GENERATIONS - ig) / ENV_GENERATIONS
+        earliness = (BITSTR_GENERATIONS - bg) / BITSTR_GENERATIONS
         ti.atomic_max(fitness[og, t, ei], local_max_fitness + earliness)
 
 

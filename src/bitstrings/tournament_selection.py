@@ -12,7 +12,7 @@ class TournamentArena:
         # This class is designed to make one selection for every individual in
         # a population.
         self.pop = pop
-        ne, ig, ew, eh, cc = pop.shape
+        ne, bg, ew, eh, cc = pop.shape
         # What individuals have already been considered in the tournament.
         self.seen = ti.field(bool, (ne, ew, eh, cc, cc))
         # What selections were made
@@ -73,18 +73,18 @@ def validate_selection():
     # (that is, from 1 to CARRYING_CAPACITY, inclusive).
     NUM_TESTS = 10_000
     ne = CARRYING_CAPACITY
-    ig = 1
+    bg = 1
     ew = NUM_TESTS
     eh = 1
     cc = CARRYING_CAPACITY
 
     # Set up NUM_TESTS populations of CARRYING_CAPACITY individuals, with
     # fitness values 1..CARRYING_CAPACITY.
-    bitstr_pop = BitstrIndividual.field(shape=(ne, ig, ew, eh, cc))
+    bitstr_pop = BitstrIndividual.field(shape=(ne, bg, ew, eh, cc))
     bitstr_pop.fitness.from_numpy(
         np.tile(
             np.arange(CARRYING_CAPACITY), ew * ne
-        ).reshape((ne, ig, ew, eh, cc)))
+        ).reshape((ne, bg, ew, eh, cc)))
 
     # Each of the NUM_TESTS populations gets assigned one of the possible
     # values for tournament size, ranging from 1 to CARRYING_CAPACITY.
