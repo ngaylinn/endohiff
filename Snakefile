@@ -172,6 +172,7 @@ rule ratchet_sweep_evolve_bitstrings:
 rule analyze_skew:
   output:
     'output/skew.png',
+  resources: gpu=1 # This process expects to monopolize the GPU.
   shell: 'python3 -m src.extras.analyze_skew {output}'
 
 
