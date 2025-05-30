@@ -10,10 +10,10 @@ FIGURES_PATH.mkdir(exist_ok=True, parents=True)
 
 
 def copy_bitstring_evolution_visualizations():
-    deep_dive_condition = 'mortality_rate_0.125_tournament_size_6'
+    deep_dive_condition = 'mortality_rate_0.125_tournament_size_8'
     deep_dive_path = SELECTION_SWEEP_PATH / deep_dive_condition
     for env_name in ['flat', 'baym', 'cppn']:
-        copyfile(deep_dive_path / env_name / 'env_fitness.png',
+        copyfile(deep_dive_path / env_name / 'bitstr_fitness.png',
                  FIGURES_PATH / f'{env_name}_fitness.png')
         with open(deep_dive_path / env_name / 'best_trial.txt', 'r') as file:
             best_trial = file.readline().strip()
@@ -49,9 +49,9 @@ def copy_sweep_visualizations():
 def copy_missing_step_visualizations():
     variants_path = OUTPUT_PATH / 'missing_steps'
     for variant in ['gap', 'high']:
-        copyfile(variants_path / variant / 'env_map.png',
-                 FIGURES_PATH / f'{variant}_map.png')
-        copyfile(variants_path / variant / 'fitness_map.png',
+        copyfile(variants_path / f'{variant}_env_map.png',
+                 FIGURES_PATH / f'{variant}_env_map.png')
+        copyfile(variants_path / f'{variant}_fitness_map.png',
                  FIGURES_PATH / f'{variant}_fitness_map.png')
 
 
