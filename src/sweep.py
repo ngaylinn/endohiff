@@ -61,8 +61,7 @@ class Sweep:
                 'tournament_size',
                 np.arange(CARRYING_CAPACITY, dtype=np.int8) + 1)
             self.sample_points = np.array(
-                [[0, 18], [1, 4], [3, 2], [3, 7], [6, 4],
-                 [8, 18], [12, 10], [16, 18]])
+                [[3, 5], [1, 10], [0, 18], [8, 18], [12, 10], [16, 18]])
         elif sweep_kind == 'ratchet':
             self.param1 = Param(
                 'migration_rate',
